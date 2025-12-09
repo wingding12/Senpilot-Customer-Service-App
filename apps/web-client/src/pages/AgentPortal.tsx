@@ -36,7 +36,7 @@ export default function AgentPortal() {
     leaveCall,
     sendChatMessage,
   } = useCallState();
-  const { queue } = useAgentQueue();
+  const { queue, alerts, unreadAlerts, dismissAlert } = useAgentQueue();
   const [agentId] = useState('AGENT_001'); // TODO: Get from auth
   const [agentStatus, setAgentStatus] = useState<'online' | 'away' | 'busy'>('online');
 
@@ -122,7 +122,10 @@ export default function AgentPortal() {
         <aside className={styles.queuePanel}>
           <QueuePanel 
             queue={queue}
+            alerts={alerts}
+            unreadAlerts={unreadAlerts}
             onSelectItem={handleSelectQueueItem}
+            onDismissAlert={dismissAlert}
             activeItemId={callState.callId}
           />
         </aside>
