@@ -25,7 +25,7 @@ A sophisticated **Human-in-the-Loop (HITL)** customer service platform featuring
 | ------------------------- | -------------------------------------------------------- | ------------- |
 | 🤖 **AI Voice Agent**     | Powered by Retell AI for low-latency voice conversations | ✅ Integrated |
 | 👤 **Copilot Assistant**  | Real-time suggestions sidebar for human representatives  | ✅ Integrated |
-| 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | 🔜 Phase 7    |
+| 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | ✅ Integrated |
 | 💬 **Multi-Channel**      | Support for both voice calls and text chat               | 🔜 Phase 8    |
 | 📊 **Diagnostics**        | Track switch events and conversation analytics           | 🔜 Phase 9    |
 | 🎯 **Agent Dashboard**    | Real-time transcript, copilot suggestions, control panel | ✅ UI Ready   |
@@ -112,13 +112,15 @@ Senpilot-Customer-Service-App/
 │   │   │   │   └── env.ts            # Environment validation (Zod)
 │   │   │   ├── controllers/
 │   │   │   │   ├── callController.ts    # Telnyx webhook handler
-│   │   │   │   └── retellController.ts  # Retell AI webhook handler
+│   │   │   │   ├── retellController.ts  # Retell AI webhook handler
+│   │   │   │   └── switchController.ts  # AI↔Human switch API
 │   │   │   ├── services/
 │   │   │   │   ├── state/
 │   │   │   │   │   └── sessionStore.ts   # Redis session management
 │   │   │   │   ├── voice/
 │   │   │   │   │   ├── telnyxClient.ts   # TeXML builder + Telnyx API
-│   │   │   │   │   └── retellClient.ts   # Retell AI SDK wrapper
+│   │   │   │   │   ├── retellClient.ts   # Retell AI SDK wrapper
+│   │   │   │   │   └── switchService.ts  # AI↔Human handoff logic
 │   │   │   │   └── copilot/
 │   │   │   │       ├── assemblyaiClient.ts  # Intent detection, sentiment
 │   │   │   │       ├── ragService.ts        # pgvector knowledge search
@@ -387,14 +389,16 @@ interface CopilotSuggestion {
 
 ## API Endpoints
 
-| Endpoint                  | Method | Description              | Status         |
-| ------------------------- | ------ | ------------------------ | -------------- |
-| `/health`                 | GET    | Health check             | ✅ Implemented |
-| `/webhooks/telnyx`        | POST   | Telnyx call events       | ✅ Implemented |
-| `/webhooks/telnyx/gather` | POST   | DTMF digit collection    | ✅ Implemented |
-| `/webhooks/retell`        | POST   | Retell transcript events | ✅ Implemented |
-| `/api/chat`               | POST   | Handle chat messages     | 🔜 Phase 8     |
-| `/api/switch`             | POST   | Toggle AI/Human mode     | 🔜 Phase 7     |
+| Endpoint                          | Method | Description              | Status         |
+| --------------------------------- | ------ | ------------------------ | -------------- |
+| `/health`                         | GET    | Health check             | ✅ Implemented |
+| `/webhooks/telnyx`                | POST   | Telnyx call events       | ✅ Implemented |
+| `/webhooks/telnyx/gather`         | POST   | DTMF digit collection    | ✅ Implemented |
+| `/webhooks/retell`                | POST   | Retell transcript events | ✅ Implemented |
+| `/api/switch`                     | POST   | Toggle AI/Human mode     | ✅ Implemented |
+| `/api/switch/stats/:callId`       | GET    | Get switch statistics    | ✅ Implemented |
+| `/api/switch/can-switch/:id/:dir` | GET    | Check if switch allowed  | ✅ Implemented |
+| `/api/chat`                       | POST   | Handle chat messages     | 🔜 Phase 8     |
 
 ---
 
@@ -643,6 +647,55 @@ their concerns and offering a concrete solution.
 
 ---
 
+## The Switch (AI↔Human Handoff)
+
+Seamless handoff between AI and Human agents using the Conference Bridge pattern.
+
+### Switch API
+
+| Endpoint                              | Method | Body                             | Response                          |
+| ------------------------------------- | ------ | -------------------------------- | --------------------------------- |
+| `/api/switch`                         | POST   | `{ callId, direction, reason? }` | `{ success, newMode, timestamp }` |
+| `/api/switch/stats/:callId`           | GET    | -                                | `{ totalSwitches, switches[] }`   |
+| `/api/switch/can-switch/:callId/:dir` | GET    | -                                | `{ allowed, reason? }`            |
+
+### Conference Bridge Pattern
+
+```
+┌─────────────────────────────────────────────────┐
+│              CONFERENCE ROOM                    │
+│                                                 │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│   │ CUSTOMER │  │ AI AGENT │  │  HUMAN   │     │
+│   │ (always  │  │ (muted/  │  │  (muted/ │     │
+│   │  active) │  │ unmuted) │  │ unmuted) │     │
+│   └──────────┘  └──────────┘  └──────────┘     │
+│                                                 │
+│   Switch = Mute one, Unmute the other          │
+│   Result = No call drop, seamless handoff      │
+└─────────────────────────────────────────────────┘
+```
+
+### Switch Flow
+
+```
+Agent clicks "Take Over"
+         ↓
+POST /api/switch { direction: "AI_TO_HUMAN" }
+         ↓
+┌─────────────────────────────────┐
+│ 1. End Retell call leg          │
+│ 2. Unmute human rep             │
+│ 3. Play transition message      │
+│ 4. Update session + database    │
+│ 5. Emit Socket.io events        │
+└─────────────────────────────────┘
+         ↓
+Frontend updates: mode = HUMAN_REP
+```
+
+---
+
 ## Development Phases
 
 | Phase | Name               | Status      | Description                             |
@@ -654,8 +707,8 @@ their concerns and offering a concrete solution.
 | 4     | Voice AI - Retell  | ✅ Complete | Retell SDK, webhooks, live transcripts  |
 | 5     | Copilot Brain      | ✅ Complete | AssemblyAI, pgvector RAG, suggestions   |
 | 6     | Frontend Polish    | ⏳ Pending  | UI refinements, animations              |
-| 7     | The Switch         | 🔜 Next     | Real-time AI↔Human handoff              |
-| 8     | Text Chat          | ⏳ Pending  | Chat endpoint, unified messages         |
+| 7     | The Switch         | ✅ Complete | Real-time AI↔Human handoff              |
+| 8     | Text Chat          | 🔜 Next     | Chat endpoint, unified messages         |
 | 9     | Diagnostics        | ⏳ Pending  | Analytics, switch tracking              |
 
 ---

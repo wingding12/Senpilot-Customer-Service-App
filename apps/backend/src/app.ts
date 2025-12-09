@@ -6,8 +6,8 @@ import { env, hasTelnyxConfig, hasRetellConfig } from "./config/env.js";
 // Controllers
 import { callController } from "./controllers/callController.js";
 import { retellController } from "./controllers/retellController.js";
+import { switchController } from "./controllers/switchController.js";
 // import { chatController } from './controllers/chatController.js';
-// import { switchController } from './controllers/switchController.js';
 
 const app = express();
 
@@ -36,9 +36,8 @@ app.get("/health", (_req, res) => {
 });
 
 // API Routes
-// app.use('/api/call', callController);  // Internal API (if needed)
+app.use("/api/switch", switchController); // AI↔Human switching
 // app.use('/api/chat', chatController);
-// app.use('/api/switch', switchController);
 
 // Webhook Routes
 app.use("/webhooks/telnyx", callController); // Telnyx call events
