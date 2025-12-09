@@ -82,8 +82,9 @@ export async function searchKnowledgeBase(
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
     // Perform cosine similarity search using raw SQL
-    // pgvector uses <=> for cosine distance (lower = more similar)
-    // We convert distance to similarity: 1 - distance
+    // pgvector <=> returns cosine distance in [0, 2]
+    // Convert to similarity and clamp to [0, 1] for confidence scores
+    // Formula: 1 - distance gives [-1, 1], then clamp negatives to 0
     const results = await prisma.$queryRaw<
       Array<{
         id: string;
@@ -98,7 +99,7 @@ export async function searchKnowledgeBase(
         title,
         content,
         category,
-        1 - (embedding <=> ${embeddingStr}::vector) as similarity
+        GREATEST(0, LEAST(1, 1 - (embedding <=> ${embeddingStr}::vector))) as similarity
       FROM knowledge_articles
       WHERE embedding IS NOT NULL
       ORDER BY embedding <=> ${embeddingStr}::vector
