@@ -1,10 +1,11 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { env, hasTelnyxConfig } from "./config/env.js";
+import { env, hasTelnyxConfig, hasRetellConfig } from "./config/env.js";
 
 // Controllers
 import { callController } from "./controllers/callController.js";
+import { retellController } from "./controllers/retellController.js";
 // import { chatController } from './controllers/chatController.js';
 // import { switchController } from './controllers/switchController.js';
 
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => {
     environment: env.NODE_ENV,
     services: {
       telnyx: hasTelnyxConfig() ? "configured" : "not configured",
+      retell: hasRetellConfig() ? "configured" : "not configured",
     },
   });
 });
@@ -40,7 +42,7 @@ app.get("/health", (_req, res) => {
 
 // Webhook Routes
 app.use("/webhooks/telnyx", callController); // Telnyx call events
-// app.use('/webhooks/retell', retellWebhookController);
+app.use("/webhooks/retell", retellController); // Retell AI events
 
 // Error handler
 app.use(
