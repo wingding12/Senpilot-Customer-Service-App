@@ -120,7 +120,8 @@ Senpilot-Customer-Service-App/
 │   │   │   │   │   ├── telnyxClient.ts   # TeXML builder + Telnyx API
 │   │   │   │   │   └── retellClient.ts   # Retell AI SDK wrapper
 │   │   │   │   └── copilot/
-│   │   │   │       └── assemblyaiClient.ts  # Intent detection, sentiment
+│   │   │   │       ├── assemblyaiClient.ts  # Intent detection, sentiment
+│   │   │   │       └── ragService.ts        # pgvector knowledge search
 │   │   │   ├── sockets/
 │   │   │   │   └── agentGateway.ts   # Socket.io event handlers
 │   │   │   ├── app.ts                # Express app setup
@@ -534,6 +535,59 @@ AssemblyAI's LeMUR powers the Copilot's intelligence for real-time agent assista
    ```env
    ASSEMBLYAI_API_KEY=your_api_key
    ```
+
+---
+
+## RAG Knowledge Base (pgvector)
+
+The Copilot uses semantic search to find relevant knowledge articles.
+
+### RAG Functions
+
+| Function                    | Purpose                              |
+| --------------------------- | ------------------------------------ |
+| `generateEmbedding()`       | Create 1536-dim vector from text     |
+| `searchKnowledgeBase()`     | pgvector cosine similarity search    |
+| `searchKnowledgeBaseText()` | Fallback text search (no embeddings) |
+| `smartSearch()`             | Auto-select best search method       |
+| `updateArticleEmbedding()`  | Update single article embedding      |
+| `updateAllEmbeddings()`     | Bulk re-index all articles           |
+
+### How It Works
+
+```
+Customer says: "How do I return my order?"
+                    ↓
+         generateEmbedding(query)
+                    ↓
+         pgvector similarity search
+                    ↓
+      ┌─────────────────────────────┐
+      │ Return Policy (0.92)        │
+      │ Refund Process (0.85)       │
+      │ Shipping Info (0.71)        │
+      └─────────────────────────────┘
+                    ↓
+         Copilot generates suggestion
+```
+
+### Setting Up OpenAI (for Embeddings)
+
+1. Create an [OpenAI account](https://platform.openai.com)
+2. Generate an API key
+3. Add to `.env`:
+   ```env
+   OPENAI_API_KEY=your_api_key
+   ```
+
+### Initializing Embeddings
+
+After seeding the database, run:
+
+```typescript
+import { updateAllEmbeddings } from "./services/copilot/ragService";
+await updateAllEmbeddings();
+```
 
 ---
 
