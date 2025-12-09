@@ -95,3 +95,11 @@ export function emitSwitchEvent(
   io.to(callRoom(callId)).emit('call:switch', { direction, timestamp: Date.now() });
 }
 
+export function emitCallEnd(callId: string): void {
+  if (!io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+  io.to(callRoom(callId)).emit('call:end', { callId, timestamp: Date.now() });
+}
+

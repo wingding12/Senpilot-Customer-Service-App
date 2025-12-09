@@ -8,7 +8,7 @@ import {
 } from "../services/state/sessionStore.js";
 import {
   emitCallStateUpdate,
-  emitTranscriptUpdate,
+  emitCallEnd,
 } from "../sockets/agentGateway.js";
 import type { CallSession } from "shared-types";
 
@@ -239,6 +239,9 @@ async function handleCallHangup(
   }
 
   // Session cleanup is handled by TTL in Redis
+
+  // Notify frontend that call ended
+  emitCallEnd(call_session_id);
 
   console.log(`📞 Call ended: ${call_session_id}`);
   res.status(200).send();
