@@ -113,34 +113,31 @@ export async function processMessage(
   let reply: string;
 
   if (session.mode === "AI_AGENT") {
-    // Use LLM-powered AI agent
+    // Use Gemini-powered AI agent for all responses
     const aiResponse = await generateAgentResponse(sessionId, transcript);
     reply = aiResponse.message;
 
-    // Handle escalation
+    // Add AI response to transcript
+    const aiTimestamp = Date.now();
+    await appendTranscript(sessionId, "AI", reply, aiTimestamp);
+
+    emitTranscriptUpdate(sessionId, {
+      speaker: "AI",
+      text: reply,
+      timestamp: aiTimestamp,
+    });
+
+    // Update queue preview
+    emitQueueMessagePreview(sessionId, `AI: ${reply.substring(0, 50)}${reply.length > 50 ? '...' : ''}`);
+
+    // Handle escalation after sending the AI's response
     if (aiResponse.shouldEscalate) {
       await switchToHuman(sessionId, aiResponse.escalationReason || "AI_ESCALATION");
-      // Adjust reply if it's a human request
-      if (aiResponse.escalationReason === "CUSTOMER_REQUEST") {
-        reply = "I'm connecting you with a customer service representative. They'll be with you shortly. Your estimated wait time is under 2 minutes.";
-      }
-    } else {
-      // Add AI response to transcript
-      const aiTimestamp = Date.now();
-      await appendTranscript(sessionId, "AI", reply, aiTimestamp);
-
-      emitTranscriptUpdate(sessionId, {
-        speaker: "AI",
-        text: reply,
-        timestamp: aiTimestamp,
-      });
-
-      // Update queue preview
-      emitQueueMessagePreview(sessionId, `AI: ${reply.substring(0, 50)}${reply.length > 50 ? '...' : ''}`);
     }
   } else {
-    // Human mode - customer message received, waiting for rep
-    reply = "Your message has been received. A customer service representative will respond shortly. Thank you for your patience.";
+    // Human mode - notify the customer that rep will respond
+    // Don't send a scripted message, just update state
+    reply = ""; // No auto-reply in human mode
 
     emitCallStateUpdate(sessionId, {
       callId: sessionId,
@@ -203,9 +200,20 @@ export async function switchBackToAI(sessionId: string): Promise<string> {
     preview: "Returned to AI assistant",
   });
 
-  // Add AI message
-  const aiMessage = "I'm back! How can I help you today? Feel free to ask me anything about your utility service.";
+  // Let Gemini generate a welcome back message based on conversation context
+  const session = await getSession(sessionId);
+  const transcript = session?.transcript || [];
+  
+  // Add a system context message to help Gemini understand the switch
+  const contextTranscript = [
+    ...transcript,
+    { speaker: "CUSTOMER" as const, text: "[Customer has switched back to AI assistant from human representative]", timestamp: Date.now() }
+  ];
+  
+  const aiResponse = await generateAgentResponse(sessionId, contextTranscript);
+  const aiMessage = aiResponse.message;
   const timestamp = Date.now();
+  
   await appendTranscript(sessionId, "AI", aiMessage, timestamp);
 
   emitTranscriptUpdate(sessionId, {

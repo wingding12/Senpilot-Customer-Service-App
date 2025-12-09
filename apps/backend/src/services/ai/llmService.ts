@@ -210,6 +210,7 @@ export interface AIAgentResponse {
 
 /**
  * Generate AI agent response using Gemini
+ * Let Gemini handle all conversations naturally within its specialized context
  */
 export async function generateAgentResponse(
   sessionId: string,
@@ -218,90 +219,104 @@ export async function generateAgentResponse(
   const context = getContext(sessionId);
   updateContextFromTranscript(context, transcript);
   
-  // Handle emergency immediately
-  if (context.isEmergency) {
-    return {
-      message: "⚠️ **SAFETY ALERT**\n\nIf you smell gas:\n• Leave the building immediately\n• Don't turn on/off any switches\n• Call 911 from outside\n• Call our emergency line: 1-800-GAS-LEAK\n\nI'm connecting you with our emergency team right now.",
-      shouldEscalate: true,
-      escalationReason: "GAS_EMERGENCY",
-      confidence: 1.0,
-    };
-  }
-  
-  // Check for human request
-  const lastMessage = transcript[transcript.length - 1]?.text.toLowerCase() || "";
-  if (
-    lastMessage.includes("human") ||
-    lastMessage.includes("representative") ||
-    lastMessage.includes("real person") ||
-    lastMessage.includes("speak to someone") ||
-    lastMessage.includes("agent")
-  ) {
-    return {
-      message: "Of course! Let me connect you with a customer service representative. They'll be with you in just a moment.",
-      shouldEscalate: true,
-      escalationReason: "CUSTOMER_REQUEST",
-      confidence: 1.0,
-    };
-  }
-  
-  // Use Gemini if available
+  // Use Gemini for all responses
   if (hasGeminiConfig()) {
     try {
-      return await generateGeminiAgentResponse(transcript);
+      const response = await generateGeminiAgentResponse(transcript, context);
+      
+      // Detect if Gemini's response indicates escalation
+      if (context.isEmergency) {
+        response.shouldEscalate = true;
+        response.escalationReason = "GAS_EMERGENCY";
+      }
+      
+      return response;
     } catch (error) {
       console.error("Gemini agent error:", error);
     }
   }
   
-  // Fallback response
+  // Fallback only if Gemini is not available
   return {
-    message: "Thank you for contacting us! I can help with billing, payments, outages, and service questions. What would you like help with?",
+    message: "I apologize, but I'm having trouble processing your request right now. Please try again or ask to speak with a representative.",
     shouldEscalate: false,
-    confidence: 0.5,
+    confidence: 0.3,
   };
 }
 
-async function generateGeminiAgentResponse(transcript: TranscriptEntry[]): Promise<AIAgentResponse> {
+async function generateGeminiAgentResponse(
+  transcript: TranscriptEntry[],
+  context: ConversationContext
+): Promise<AIAgentResponse> {
   const model = getAgentModel();
   
-  // Build conversation history
-  const history: Content[] = transcript.slice(0, -1).map(entry => ({
-    role: entry.speaker === "CUSTOMER" ? "user" : "model",
-    parts: [{ text: entry.text }],
-  }));
+  // Build conversation history (exclude system context messages)
+  const history: Content[] = transcript
+    .slice(0, -1)
+    .filter(entry => !entry.text.startsWith("["))
+    .map(entry => ({
+      role: entry.speaker === "CUSTOMER" ? "user" : "model",
+      parts: [{ text: entry.text }],
+    }));
   
-  // Get the last customer message
+  // Get the last message
   const lastMessage = transcript[transcript.length - 1];
-  if (!lastMessage || lastMessage.speaker !== "CUSTOMER") {
+  if (!lastMessage) {
     return {
-      message: "How can I help you today?",
+      message: "Hello! I'm your utility service assistant. How can I help you today?",
       shouldEscalate: false,
       confidence: 0.6,
     };
   }
   
+  // Prepare the user message
+  let userMessage = lastMessage.text;
+  
+  // If it's a system context (like switching back to AI), extract the context
+  if (userMessage.startsWith("[")) {
+    userMessage = "The customer has just returned to chat with me after speaking with a human representative. Please greet them warmly and ask how I can continue to help them.";
+  }
+  
   // Search knowledge base for context
-  const articles = await smartSearch(lastMessage.text, 2);
+  const articles = await smartSearch(userMessage, 2);
   let contextInfo = "";
   if (articles.length > 0) {
-    contextInfo = `\n\nRelevant info from knowledge base:\n${articles.map(a => `- ${a.title}: ${a.content.substring(0, 150)}...`).join("\n")}`;
+    contextInfo = `\n\n[Knowledge base context - use if relevant:\n${articles.map(a => `- ${a.title}: ${a.content.substring(0, 200)}`).join("\n")}]`;
+  }
+  
+  // Add sentiment context if frustrated
+  if (context.customerSentiment === 'frustrated') {
+    contextInfo += "\n\n[Note: Customer appears frustrated. Be extra empathetic and solution-focused.]";
   }
   
   const chat = model.startChat({ history });
-  const result = await chat.sendMessage(lastMessage.text + contextInfo);
+  const result = await chat.sendMessage(userMessage + contextInfo);
   const responseText = result.response.text();
   
-  // Check if response suggests escalation
+  // Check if response suggests escalation to human
+  const lowerResponse = responseText.toLowerCase();
   const shouldEscalate = 
-    responseText.toLowerCase().includes("connect you with") ||
-    responseText.toLowerCase().includes("transfer you") ||
-    responseText.toLowerCase().includes("human representative");
+    lowerResponse.includes("connect you with a representative") ||
+    lowerResponse.includes("transfer you to") ||
+    lowerResponse.includes("let me get a human") ||
+    lowerResponse.includes("speak with a representative") ||
+    lowerResponse.includes("connecting you now");
+  
+  // Determine escalation reason
+  let escalationReason: string | undefined;
+  if (shouldEscalate) {
+    const lastCustomerMsg = lastMessage.text.toLowerCase();
+    if (lastCustomerMsg.includes("human") || lastCustomerMsg.includes("representative") || lastCustomerMsg.includes("real person")) {
+      escalationReason = "CUSTOMER_REQUEST";
+    } else {
+      escalationReason = "AI_SUGGESTED";
+    }
+  }
   
   return {
     message: responseText,
     shouldEscalate,
-    escalationReason: shouldEscalate ? "AI_SUGGESTED" : undefined,
+    escalationReason,
     confidence: 0.9,
   };
 }
