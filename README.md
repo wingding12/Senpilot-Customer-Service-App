@@ -110,9 +110,13 @@ Senpilot-Customer-Service-App/
 │   │   ├── src/
 │   │   │   ├── config/
 │   │   │   │   └── env.ts            # Environment validation (Zod)
+│   │   │   ├── controllers/
+│   │   │   │   └── callController.ts # Telnyx webhook handler
 │   │   │   ├── services/
-│   │   │   │   └── state/
-│   │   │   │       └── sessionStore.ts   # Redis session management
+│   │   │   │   ├── state/
+│   │   │   │   │   └── sessionStore.ts   # Redis session management
+│   │   │   │   └── voice/
+│   │   │   │       └── telnyxClient.ts   # TeXML builder + Telnyx API
 │   │   │   ├── sockets/
 │   │   │   │   └── agentGateway.ts   # Socket.io event handlers
 │   │   │   ├── app.ts                # Express app setup
@@ -377,14 +381,68 @@ interface CopilotSuggestion {
 
 ## API Endpoints
 
-| Endpoint           | Method | Description              | Status         |
-| ------------------ | ------ | ------------------------ | -------------- |
-| `/health`          | GET    | Health check             | ✅ Implemented |
-| `/api/call`        | POST   | Handle incoming calls    | 🔜 Phase 3     |
-| `/api/chat`        | POST   | Handle chat messages     | 🔜 Phase 8     |
-| `/api/switch`      | POST   | Toggle AI/Human mode     | 🔜 Phase 7     |
-| `/webhooks/telnyx` | POST   | Telnyx call events       | 🔜 Phase 3     |
-| `/webhooks/retell` | POST   | Retell transcript events | 🔜 Phase 4     |
+| Endpoint                  | Method | Description              | Status         |
+| ------------------------- | ------ | ------------------------ | -------------- |
+| `/health`                 | GET    | Health check             | ✅ Implemented |
+| `/webhooks/telnyx`        | POST   | Telnyx call events       | ✅ Implemented |
+| `/webhooks/telnyx/gather` | POST   | DTMF digit collection    | ✅ Implemented |
+| `/webhooks/retell`        | POST   | Retell transcript events | 🔜 Phase 4     |
+| `/api/chat`               | POST   | Handle chat messages     | 🔜 Phase 8     |
+| `/api/switch`             | POST   | Toggle AI/Human mode     | 🔜 Phase 7     |
+
+---
+
+## Telnyx Webhooks
+
+### Handled Events
+
+| Event Type            | Action                                   |
+| --------------------- | ---------------------------------------- |
+| `call.initiated`      | Create call record, answer with greeting |
+| `call.answered`       | Update status, notify frontend           |
+| `call.dtmf.received`  | Handle `0` (human) or `*` (AI) switch    |
+| `call.hangup`         | Cleanup session, update database         |
+| `call.speak.ended`    | Acknowledgement only                     |
+| `call.playback.ended` | Acknowledgement only                     |
+
+### TeXML Responses
+
+The backend responds to Telnyx webhooks with TeXML (XML-based call control):
+
+```xml
+<!-- Answer with greeting and DTMF gather -->
+<Response>
+  <Gather action="/webhooks/telnyx/gather" numDigits="1" timeout="5">
+    <Say voice="alice">Welcome to Senpilot. Press 0 for human.</Say>
+  </Gather>
+</Response>
+
+<!-- Simple speak -->
+<Response>
+  <Say voice="alice">Connecting you with a representative.</Say>
+</Response>
+
+<!-- Hangup -->
+<Response>
+  <Say voice="alice">Thank you for calling. Goodbye.</Say>
+  <Hangup/>
+</Response>
+```
+
+### Setting Up Telnyx
+
+1. Create a [Telnyx account](https://telnyx.com)
+2. Purchase a phone number
+3. Create a TeXML Application with webhook URL: `https://your-domain.com/webhooks/telnyx`
+4. Assign the phone number to the TeXML Application
+5. Add credentials to `.env`:
+   ```env
+   TELNYX_API_KEY=your_api_key
+   TELNYX_PUBLIC_KEY=your_public_key
+   TELNYX_CONNECTION_ID=your_connection_id
+   TELNYX_PHONE_NUMBER=+1234567890
+   WEBHOOK_BASE_URL=https://your-ngrok-url.ngrok.io
+   ```
 
 ---
 
@@ -395,8 +453,8 @@ interface CopilotSuggestion {
 | 0     | Foundation         | ✅ Complete | Monorepo, Docker, TypeScript setup      |
 | 1     | Database Layer     | ✅ Complete | Prisma, pgvector, migrations, seeding   |
 | 2     | Backend Skeleton   | ✅ Complete | Express, Socket.io, Redis, health check |
-| 3     | Telephony - Telnyx | 🔜 Next     | Incoming calls, webhooks                |
-| 4     | Voice AI - Retell  | ⏳ Pending  | AI agent, transcripts                   |
+| 3     | Telephony - Telnyx | ✅ Complete | Incoming calls, webhooks, TeXML         |
+| 4     | Voice AI - Retell  | 🔜 Next     | AI agent, transcripts                   |
 | 5     | Copilot Brain      | ⏳ Pending  | AssemblyAI, pgvector RAG, suggestions   |
 | 6     | Frontend Polish    | ⏳ Pending  | UI refinements, animations              |
 | 7     | The Switch         | ⏳ Pending  | Real-time AI↔Human handoff              |
