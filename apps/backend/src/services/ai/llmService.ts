@@ -236,11 +236,62 @@ export async function generateAgentResponse(
     }
   }
   
-  // Fallback only if Gemini is not available
+  // Fallback responses when Gemini is not available
+  return generateFallbackResponse(transcript, context);
+}
+
+/**
+ * Generate fallback response when Gemini is unavailable
+ */
+function generateFallbackResponse(
+  transcript: TranscriptEntry[],
+  context: ConversationContext
+): AIAgentResponse {
+  const lastMessage = transcript[transcript.length - 1]?.text.toLowerCase() || "";
+  
+  // Emergency handling
+  if (context.isEmergency) {
+    return {
+      message: "⚠️ If you smell gas, please leave the building immediately, don't use any electrical switches, and call 911 from outside. Our emergency line is 1-800-GAS-LEAK. I'm connecting you with our emergency team now.",
+      shouldEscalate: true,
+      escalationReason: "GAS_EMERGENCY",
+      confidence: 1.0,
+    };
+  }
+  
+  // Human request
+  if (lastMessage.includes("human") || lastMessage.includes("representative") || lastMessage.includes("agent") || lastMessage.includes("real person")) {
+    return {
+      message: "Of course! I'll connect you with a customer service representative right away. Please hold for just a moment.",
+      shouldEscalate: true,
+      escalationReason: "CUSTOMER_REQUEST",
+      confidence: 0.9,
+    };
+  }
+  
+  // Billing
+  if (lastMessage.includes("bill") || lastMessage.includes("charge") || lastMessage.includes("payment")) {
+    return {
+      message: "I can help with billing questions! Bills are due 21 days after the statement date. Payment options include: online (free), auto-pay ($2/month discount), phone ($2.50 fee), or mail. Would you like more details about your specific question?",
+      shouldEscalate: false,
+      confidence: 0.7,
+    };
+  }
+  
+  // Outage
+  if (lastMessage.includes("outage") || lastMessage.includes("power out") || lastMessage.includes("no power")) {
+    return {
+      message: "I'm sorry to hear you're experiencing a power issue. Please check your circuit breaker first. If that's not the issue, you can report outages at outage.utilitycompany.com or call 1-800-OUTAGES. What's your service address so I can check for known outages in your area?",
+      shouldEscalate: false,
+      confidence: 0.7,
+    };
+  }
+  
+  // Default greeting/help
   return {
-    message: "I apologize, but I'm having trouble processing your request right now. Please try again or ask to speak with a representative.",
+    message: "Hello! I'm your utility service assistant. I can help with billing, payments, outages, starting or stopping service, and more. What can I help you with today?",
     shouldEscalate: false,
-    confidence: 0.3,
+    confidence: 0.5,
   };
 }
 
@@ -248,18 +299,19 @@ async function generateGeminiAgentResponse(
   transcript: TranscriptEntry[],
   context: ConversationContext
 ): Promise<AIAgentResponse> {
-  const model = getAgentModel();
+  const client = getGeminiClient();
   
-  // Build conversation history (exclude system context messages)
-  const history: Content[] = transcript
-    .slice(0, -1)
-    .filter(entry => !entry.text.startsWith("["))
-    .map(entry => ({
-      role: entry.speaker === "CUSTOMER" ? "user" : "model",
-      parts: [{ text: entry.text }],
-    }));
+  // Use generateContent with full conversation context (more reliable than chat API)
+  const model = client.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 400,
+      topP: 0.9,
+    },
+  });
   
-  // Get the last message
+  // Get the last customer message
   const lastMessage = transcript[transcript.length - 1];
   if (!lastMessage) {
     return {
@@ -269,44 +321,61 @@ async function generateGeminiAgentResponse(
     };
   }
   
-  // Prepare the user message
-  let userMessage = lastMessage.text;
-  
-  // If it's a system context (like switching back to AI), extract the context
-  if (userMessage.startsWith("[")) {
-    userMessage = "The customer has just returned to chat with me after speaking with a human representative. Please greet them warmly and ask how I can continue to help them.";
+  // Build conversation context as text
+  const recentMessages = transcript.slice(-8); // Last 8 messages for context
+  let conversationHistory = "";
+  if (recentMessages.length > 1) {
+    conversationHistory = "CONVERSATION SO FAR:\n" + 
+      recentMessages.slice(0, -1)
+        .filter(m => !m.text.startsWith("["))
+        .map(m => `${m.speaker === "CUSTOMER" ? "Customer" : "Assistant"}: ${m.text}`)
+        .join("\n") + 
+      "\n\n";
   }
   
-  // Search knowledge base for context
-  const articles = await smartSearch(userMessage, 2);
-  let contextInfo = "";
-  if (articles.length > 0) {
-    contextInfo = `\n\n[Knowledge base context - use if relevant:\n${articles.map(a => `- ${a.title}: ${a.content.substring(0, 200)}`).join("\n")}]`;
+  // Current message to respond to
+  let currentMessage = lastMessage.text;
+  if (currentMessage.startsWith("[")) {
+    currentMessage = "(Customer just returned from speaking with a human representative)";
   }
   
-  // Add sentiment context if frustrated
-  if (context.customerSentiment === 'frustrated') {
-    contextInfo += "\n\n[Note: Customer appears frustrated. Be extra empathetic and solution-focused.]";
+  // Search knowledge base
+  const articles = await smartSearch(currentMessage, 2);
+  let kbContext = "";
+  if (articles.length > 0 && articles[0].similarity > 0.5) {
+    kbContext = "\n\nRELEVANT INFO:\n" + 
+      articles.slice(0, 2).map(a => `• ${a.title}: ${a.content.substring(0, 150)}`).join("\n");
   }
   
-  const chat = model.startChat({ history });
-  const result = await chat.sendMessage(userMessage + contextInfo);
+  // Build the prompt
+  const prompt = `${AGENT_SYSTEM_PROMPT}
+
+${conversationHistory}CUSTOMER'S CURRENT MESSAGE: ${currentMessage}
+${kbContext}
+${context.customerSentiment === 'frustrated' ? '\n⚠️ Customer seems frustrated - be extra empathetic.\n' : ''}
+Respond naturally as the utility assistant. Be helpful and concise.`;
+
+  console.log(`🤖 Gemini request for session, transcript length: ${transcript.length}`);
+  
+  const result = await model.generateContent(prompt);
   const responseText = result.response.text();
+  
+  console.log(`✅ Gemini response: ${responseText.substring(0, 100)}...`);
   
   // Check if response suggests escalation to human
   const lowerResponse = responseText.toLowerCase();
   const shouldEscalate = 
-    lowerResponse.includes("connect you with a representative") ||
-    lowerResponse.includes("transfer you to") ||
-    lowerResponse.includes("let me get a human") ||
+    lowerResponse.includes("connect you with") ||
+    lowerResponse.includes("transfer you") ||
+    lowerResponse.includes("human representative") ||
     lowerResponse.includes("speak with a representative") ||
-    lowerResponse.includes("connecting you now");
+    lowerResponse.includes("connecting you");
   
   // Determine escalation reason
   let escalationReason: string | undefined;
   if (shouldEscalate) {
     const lastCustomerMsg = lastMessage.text.toLowerCase();
-    if (lastCustomerMsg.includes("human") || lastCustomerMsg.includes("representative") || lastCustomerMsg.includes("real person")) {
+    if (lastCustomerMsg.includes("human") || lastCustomerMsg.includes("representative") || lastCustomerMsg.includes("real person") || lastCustomerMsg.includes("agent")) {
       escalationReason = "CUSTOMER_REQUEST";
     } else {
       escalationReason = "AI_SUGGESTED";
@@ -446,12 +515,20 @@ async function generateGeminiCopilotSuggestion(
   transcript: TranscriptEntry[],
   context: ConversationContext
 ): Promise<GeminiCopilotResponse | null> {
-  const model = getCopilotModel();
+  const client = getGeminiClient();
+  const model = client.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 250,
+    },
+  });
   
-  // Get recent messages (last 4-6)
+  // Get recent messages
   const recentTranscript = transcript.slice(-6);
   const conversationText = recentTranscript
-    .map(t => `${t.speaker}: ${t.text}`)
+    .filter(t => !t.text.startsWith("["))
+    .map(t => `${t.speaker === "CUSTOMER" ? "Customer" : t.speaker === "AI" ? "AI" : "Agent"}: ${t.text}`)
     .join("\n");
   
   // Search for relevant knowledge
@@ -459,34 +536,36 @@ async function generateGeminiCopilotSuggestion(
   const articles = await smartSearch(lastCustomerMsg, 2);
   
   let kbContext = "";
-  if (articles.length > 0) {
-    kbContext = `\n\nRelevant policies:\n${articles.map(a => `- ${a.title}: ${a.content.substring(0, 100)}...`).join("\n")}`;
+  if (articles.length > 0 && articles[0].similarity > 0.4) {
+    kbContext = `\n\nRelevant policies:\n${articles.map(a => `- ${a.title}: ${a.content.substring(0, 100)}`).join("\n")}`;
   }
   
-  const prompt = `Analyze this utility customer service conversation and provide copilot assistance:
+  const prompt = `You are a copilot helping a customer service rep at a utility company. Analyze this conversation and provide a brief insight.
 
 CONVERSATION:
 ${conversationText}
 
 CONTEXT:
 - Customer sentiment: ${context.customerSentiment}
-- Message count: ${transcript.length}
 ${kbContext}
 
-Respond with JSON only. Include a brief relevant policy snippet if it would help the rep.`;
+Respond with ONLY valid JSON in this exact format:
+{"insight":"1-2 sentence summary","suggestion":"what rep should do","snippet":"brief policy if relevant or null","priority":"low|medium|high|critical","type":"info|action|warning"}`;
 
   try {
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     
+    console.log(`🎯 Copilot raw response: ${responseText.substring(0, 150)}`);
+    
     // Parse JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const jsonMatch = responseText.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]) as GeminiCopilotResponse;
       return parsed;
     }
   } catch (error) {
-    console.error("Gemini copilot parse error:", error);
+    console.error("Gemini copilot error:", error);
   }
   
   return null;
