@@ -27,7 +27,7 @@ A sophisticated **Human-in-the-Loop (HITL)** customer service platform featuring
 | 👤 **Copilot Assistant**  | Real-time suggestions sidebar for human representatives  | ✅ Integrated |
 | 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | ✅ Integrated |
 | 💬 **Multi-Channel**      | Support for both voice calls and text chat               | ✅ Integrated |
-| 📊 **Diagnostics**        | Track switch events and conversation analytics           | 🔜 Phase 9    |
+| 📊 **Diagnostics**        | Track switch events and conversation analytics           | ✅ Integrated |
 | 🎯 **Agent Dashboard**    | Real-time transcript, copilot suggestions, control panel | ✅ UI Ready   |
 | 🗣️ **Customer Widget**    | Chat window and voice call button for customers          | ✅ UI Ready   |
 
@@ -111,10 +111,11 @@ Senpilot-Customer-Service-App/
 │   │   │   ├── config/
 │   │   │   │   └── env.ts            # Environment validation (Zod)
 │   │   │   ├── controllers/
-│   │   │   │   ├── callController.ts    # Telnyx webhook handler
-│   │   │   │   ├── retellController.ts  # Retell AI webhook handler
-│   │   │   │   ├── switchController.ts  # AI↔Human switch API
-│   │   │   │   └── chatController.ts    # Text chat API
+│   │   │   │   ├── callController.ts       # Telnyx webhook handler
+│   │   │   │   ├── retellController.ts     # Retell AI webhook handler
+│   │   │   │   ├── switchController.ts     # AI↔Human switch API
+│   │   │   │   ├── chatController.ts       # Text chat API
+│   │   │   │   └── analyticsController.ts  # Diagnostics & metrics API
 │   │   │   ├── services/
 │   │   │   │   ├── state/
 │   │   │   │   │   └── sessionStore.ts   # Redis session management
@@ -124,6 +125,8 @@ Senpilot-Customer-Service-App/
 │   │   │   │   │   └── switchService.ts  # AI↔Human handoff logic
 │   │   │   │   ├── chat/
 │   │   │   │   │   └── chatService.ts    # Chat message processing
+│   │   │   │   ├── analytics/
+│   │   │   │   │   └── analyticsService.ts  # Metrics aggregation
 │   │   │   │   └── copilot/
 │   │   │   │       ├── assemblyaiClient.ts  # Intent detection, sentiment
 │   │   │   │       ├── ragService.ts        # pgvector knowledge search
@@ -352,16 +355,20 @@ model KnowledgeArticle {
 | `call:join`           | `callId: string`        | Join a call room for updates |
 | `call:leave`          | `callId: string`        | Leave a call room            |
 | `call:request_switch` | `{ callId, direction }` | Request AI↔Human switch      |
+| `metrics:subscribe`   | —                       | Subscribe to metrics updates |
+| `metrics:unsubscribe` | —                       | Unsubscribe from metrics     |
 
 ### Server → Client
 
-| Event                | Payload                    | Description            |
-| -------------------- | -------------------------- | ---------------------- |
-| `call:state_update`  | `CallStateUpdate`          | Call state changed     |
-| `transcript:update`  | `TranscriptEntry`          | New transcript entry   |
-| `copilot:suggestion` | `CopilotSuggestion`        | New copilot suggestion |
-| `call:switch`        | `{ direction, timestamp }` | Switch completed       |
-| `call:end`           | —                          | Call ended             |
+| Event                | Payload                     | Description            |
+| -------------------- | --------------------------- | ---------------------- |
+| `call:state_update`  | `CallStateUpdate`           | Call state changed     |
+| `transcript:update`  | `TranscriptEntry`           | New transcript entry   |
+| `copilot:suggestion` | `CopilotSuggestion`         | New copilot suggestion |
+| `call:switch`        | `{ direction, timestamp }`  | Switch completed       |
+| `call:end`           | —                           | Call ended             |
+| `metrics:update`     | `DashboardMetrics`          | Dashboard metrics      |
+| `metrics:event`      | `{ type, data, timestamp }` | Granular metric event  |
 
 ### TypeScript Types
 
@@ -405,6 +412,13 @@ interface CopilotSuggestion {
 | `/api/chat/respond`               | POST   | Human rep sends response    | ✅ Implemented |
 | `/api/chat/end`                   | POST   | End a chat session          | ✅ Implemented |
 | `/api/chat/switch`                | POST   | Switch chat AI↔Human mode   | ✅ Implemented |
+| `/api/analytics/dashboard`        | GET    | Dashboard metrics           | ✅ Implemented |
+| `/api/analytics/calls`            | GET    | Recent calls list           | ✅ Implemented |
+| `/api/analytics/calls/:callId`    | GET    | Call details & switches     | ✅ Implemented |
+| `/api/analytics/switches`         | GET    | Switch analytics            | ✅ Implemented |
+| `/api/analytics/timeseries`       | GET    | Time series data            | ✅ Implemented |
+| `/api/analytics/performance`      | GET    | Performance metrics         | ✅ Implemented |
+| `/api/analytics/summary`          | GET    | Combined summary            | ✅ Implemented |
 
 ---
 
@@ -774,6 +788,89 @@ curl -X POST http://localhost:3001/api/chat/respond \
 
 ---
 
+## Analytics & Diagnostics
+
+Real-time metrics and analytics for monitoring platform performance.
+
+### Analytics Endpoints
+
+| Endpoint                       | Method | Description                  | Query Params                  |
+| ------------------------------ | ------ | ---------------------------- | ----------------------------- |
+| `/api/analytics/dashboard`     | GET    | High-level dashboard metrics | —                             |
+| `/api/analytics/calls`         | GET    | Recent calls list            | `limit` (default 10, max 100) |
+| `/api/analytics/calls/:callId` | GET    | Detailed call metrics        | —                             |
+| `/api/analytics/switches`      | GET    | Switch analytics             | `days` (default 7)            |
+| `/api/analytics/timeseries`    | GET    | Time series data             | `days`, `granularity`         |
+| `/api/analytics/performance`   | GET    | Performance metrics          | —                             |
+| `/api/analytics/summary`       | GET    | Combined summary             | —                             |
+
+### Dashboard Metrics Response
+
+```json
+{
+  "overview": {
+    "totalCalls": 150,
+    "activeCalls": 3,
+    "avgDuration": 245,
+    "totalSwitches": 42
+  },
+  "today": {
+    "calls": 25,
+    "switches": 8,
+    "avgDuration": 180
+  },
+  "modeDistribution": {
+    "aiResolved": 85,
+    "humanResolved": 35,
+    "mixed": 30
+  }
+}
+```
+
+### Switch Analytics Response
+
+```json
+{
+  "totalSwitches": 42,
+  "byDirection": {
+    "aiToHuman": 35,
+    "humanToAi": 7
+  },
+  "byReason": {
+    "CUSTOMER_REQUEST": 20,
+    "DTMF_REQUEST": 10,
+    "AGENT_DASHBOARD": 12
+  },
+  "avgSwitchesPerCall": 0.28,
+  "peakSwitchHour": 14
+}
+```
+
+### Real-time Metrics (Socket.io)
+
+Subscribe to real-time metrics updates via Socket.io:
+
+```typescript
+// Subscribe to metrics
+socket.emit("metrics:subscribe");
+
+// Receive updates
+socket.on("metrics:update", (metrics) => {
+  console.log("Dashboard metrics:", metrics);
+});
+
+// Receive granular events
+socket.on("metrics:event", ({ type, data, timestamp }) => {
+  // type: 'call:started' | 'call:ended' | 'switch:occurred'
+  console.log(`Event: ${type}`, data);
+});
+
+// Unsubscribe
+socket.emit("metrics:unsubscribe");
+```
+
+---
+
 ## Development Phases
 
 | Phase | Name               | Status      | Description                             |
@@ -787,7 +884,7 @@ curl -X POST http://localhost:3001/api/chat/respond \
 | 6     | Frontend Polish    | ⏳ Pending  | UI refinements, animations              |
 | 7     | The Switch         | ✅ Complete | Real-time AI↔Human handoff              |
 | 8     | Text Chat          | ✅ Complete | Chat endpoint, unified messages         |
-| 9     | Diagnostics        | 🔜 Next     | Analytics, switch tracking              |
+| 9     | Diagnostics        | ✅ Complete | Analytics, switch tracking              |
 
 ---
 

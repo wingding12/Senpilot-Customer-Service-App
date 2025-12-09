@@ -13,6 +13,8 @@ import {
 import {
   emitCallStateUpdate,
   emitCallEnd,
+  emitMetricsUpdate,
+  emitMetricEvent,
 } from "../sockets/agentGateway.js";
 import type { CallSession } from "shared-types";
 
@@ -207,6 +209,10 @@ async function handleCallAnswered(
     mode: "AI_AGENT",
   });
 
+  // Emit metrics update for dashboards
+  emitMetricEvent("call:started", { callId: call_session_id });
+  emitMetricsUpdate();
+
   res.status(200).send();
 }
 
@@ -282,6 +288,10 @@ async function handleCallHangup(
   // Notify frontend that call ended
   emitCallEnd(call_session_id);
 
+  // Emit metrics update for dashboards
+  emitMetricEvent("call:ended", { callId: call_session_id });
+  emitMetricsUpdate();
+
   console.log(`📞 Call ended: ${call_session_id}`);
   res.status(200).send();
 }
@@ -330,6 +340,10 @@ async function handleSwitch(
     isMuted: false,
     mode: newMode as "AI_AGENT" | "HUMAN_REP",
   });
+
+  // Emit metrics update for dashboards
+  emitMetricEvent("switch:occurred", { callId, direction, reason });
+  emitMetricsUpdate();
 
   console.log(`🔄 Switch: ${direction} for call ${callId} (reason: ${reason})`);
 }

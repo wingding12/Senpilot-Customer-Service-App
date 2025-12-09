@@ -8,6 +8,7 @@ import { callController } from "./controllers/callController.js";
 import { retellController } from "./controllers/retellController.js";
 import { switchController } from "./controllers/switchController.js";
 import { chatController } from "./controllers/chatController.js";
+import { analyticsController } from "./controllers/analyticsController.js";
 
 const app = express();
 
@@ -36,8 +37,9 @@ app.get("/health", (_req, res) => {
 });
 
 // API Routes
-app.use("/api/switch", switchController); // AI↔Human switching
-app.use("/api/chat", chatController);     // Text chat
+app.use("/api/switch", switchController);       // AI↔Human switching
+app.use("/api/chat", chatController);           // Text chat
+app.use("/api/analytics", analyticsController); // Diagnostics & metrics
 
 // Webhook Routes
 app.use("/webhooks/telnyx", callController); // Telnyx call events

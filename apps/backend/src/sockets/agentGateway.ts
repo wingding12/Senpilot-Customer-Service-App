@@ -1,10 +1,11 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { CopilotSuggestion, CallStateUpdate, TranscriptEntry } from 'shared-types';
 import { executeSwitch } from '../services/voice/switchService.js';
+import { getDashboardMetrics } from '../services/analytics/analyticsService.js';
 
 let io: SocketIOServer | null = null;
 
-// Room naming convention: agent:<agentId>, call:<callId>
+// Room naming convention: agent:<agentId>, call:<callId>, metrics
 function agentRoom(agentId: string): string {
   return `agent:${agentId}`;
 }
@@ -12,6 +13,8 @@ function agentRoom(agentId: string): string {
 function callRoom(callId: string): string {
   return `call:${callId}`;
 }
+
+const METRICS_ROOM = 'metrics';
 
 export function initializeAgentGateway(socketServer: SocketIOServer): void {
   io = socketServer;
@@ -35,6 +38,26 @@ export function initializeAgentGateway(socketServer: SocketIOServer): void {
     socket.on('call:leave', (callId: string) => {
       socket.leave(callRoom(callId));
       console.log(`📞 Socket ${socket.id} left call ${callId}`);
+    });
+
+    // Subscribe to real-time metrics updates
+    socket.on('metrics:subscribe', async () => {
+      socket.join(METRICS_ROOM);
+      console.log(`📊 Socket ${socket.id} subscribed to metrics`);
+      
+      // Send initial metrics immediately
+      try {
+        const metrics = await getDashboardMetrics();
+        socket.emit('metrics:update', metrics);
+      } catch (error) {
+        console.error('Failed to send initial metrics:', error);
+      }
+    });
+
+    // Unsubscribe from metrics
+    socket.on('metrics:unsubscribe', () => {
+      socket.leave(METRICS_ROOM);
+      console.log(`📊 Socket ${socket.id} unsubscribed from metrics`);
     });
 
     // Handle switch request from agent dashboard
@@ -111,5 +134,37 @@ export function emitCallEnd(callId: string): void {
     return;
   }
   io.to(callRoom(callId)).emit('call:end', { callId, timestamp: Date.now() });
+}
+
+/**
+ * Emit metrics update to all subscribed clients
+ * Called after call state changes to keep dashboards in sync
+ */
+export async function emitMetricsUpdate(): Promise<void> {
+  if (!io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+  
+  try {
+    const metrics = await getDashboardMetrics();
+    io.to(METRICS_ROOM).emit('metrics:update', metrics);
+  } catch (error) {
+    console.error('Failed to emit metrics update:', error);
+  }
+}
+
+/**
+ * Emit a specific metric event (for granular updates)
+ */
+export function emitMetricEvent(
+  eventType: 'call:started' | 'call:ended' | 'switch:occurred',
+  data: Record<string, unknown>
+): void {
+  if (!io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+  io.to(METRICS_ROOM).emit('metrics:event', { type: eventType, data, timestamp: Date.now() });
 }
 
