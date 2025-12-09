@@ -21,15 +21,15 @@ A sophisticated **Human-in-the-Loop (HITL)** customer service platform featuring
 
 ## Features
 
-| Feature                   | Description                                              | Status      |
-| ------------------------- | -------------------------------------------------------- | ----------- |
-| 🤖 **AI Voice Agent**     | Powered by Retell AI for low-latency voice conversations | 🔜 Phase 4  |
-| 👤 **Copilot Assistant**  | Real-time suggestions sidebar for human representatives  | 🔜 Phase 5  |
-| 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | 🔜 Phase 7  |
-| 💬 **Multi-Channel**      | Support for both voice calls and text chat               | 🔜 Phase 8  |
-| 📊 **Diagnostics**        | Track switch events and conversation analytics           | 🔜 Phase 9  |
-| 🎯 **Agent Dashboard**    | Real-time transcript, copilot suggestions, control panel | ✅ UI Ready |
-| 🗣️ **Customer Widget**    | Chat window and voice call button for customers          | ✅ UI Ready |
+| Feature                   | Description                                              | Status        |
+| ------------------------- | -------------------------------------------------------- | ------------- |
+| 🤖 **AI Voice Agent**     | Powered by Retell AI for low-latency voice conversations | ✅ Integrated |
+| 👤 **Copilot Assistant**  | Real-time suggestions sidebar for human representatives  | 🔜 Phase 5    |
+| 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | 🔜 Phase 7    |
+| 💬 **Multi-Channel**      | Support for both voice calls and text chat               | 🔜 Phase 8    |
+| 📊 **Diagnostics**        | Track switch events and conversation analytics           | 🔜 Phase 9    |
+| 🎯 **Agent Dashboard**    | Real-time transcript, copilot suggestions, control panel | ✅ UI Ready   |
+| 🗣️ **Customer Widget**    | Chat window and voice call button for customers          | ✅ UI Ready   |
 
 ---
 
@@ -111,12 +111,14 @@ Senpilot-Customer-Service-App/
 │   │   │   ├── config/
 │   │   │   │   └── env.ts            # Environment validation (Zod)
 │   │   │   ├── controllers/
-│   │   │   │   └── callController.ts # Telnyx webhook handler
+│   │   │   │   ├── callController.ts    # Telnyx webhook handler
+│   │   │   │   └── retellController.ts  # Retell AI webhook handler
 │   │   │   ├── services/
 │   │   │   │   ├── state/
 │   │   │   │   │   └── sessionStore.ts   # Redis session management
 │   │   │   │   └── voice/
-│   │   │   │       └── telnyxClient.ts   # TeXML builder + Telnyx API
+│   │   │   │       ├── telnyxClient.ts   # TeXML builder + Telnyx API
+│   │   │   │       └── retellClient.ts   # Retell AI SDK wrapper
 │   │   │   ├── sockets/
 │   │   │   │   └── agentGateway.ts   # Socket.io event handlers
 │   │   │   ├── app.ts                # Express app setup
@@ -386,7 +388,7 @@ interface CopilotSuggestion {
 | `/health`                 | GET    | Health check             | ✅ Implemented |
 | `/webhooks/telnyx`        | POST   | Telnyx call events       | ✅ Implemented |
 | `/webhooks/telnyx/gather` | POST   | DTMF digit collection    | ✅ Implemented |
-| `/webhooks/retell`        | POST   | Retell transcript events | 🔜 Phase 4     |
+| `/webhooks/retell`        | POST   | Retell transcript events | ✅ Implemented |
 | `/api/chat`               | POST   | Handle chat messages     | 🔜 Phase 8     |
 | `/api/switch`             | POST   | Toggle AI/Human mode     | 🔜 Phase 7     |
 
@@ -446,6 +448,59 @@ The backend responds to Telnyx webhooks with TeXML (XML-based call control):
 
 ---
 
+## Retell AI Integration
+
+Retell AI provides a complete voice AI solution (STT → LLM → TTS) in a single low-latency service.
+
+### Retell Webhook Events
+
+| Event           | Description                             |
+| --------------- | --------------------------------------- |
+| `call_started`  | AI call has begun                       |
+| `call_ended`    | Call ended (includes full transcript)   |
+| `call_analyzed` | Post-call analysis (sentiment, summary) |
+| `transcript`    | Real-time transcript update during call |
+
+### Retell Client Functions
+
+| Function              | Purpose                                |
+| --------------------- | -------------------------------------- |
+| `registerPhoneCall()` | Register incoming call with Retell AI  |
+| `createWebCall()`     | Create browser-based call (for widget) |
+| `getCallDetails()`    | Retrieve call transcript and status    |
+| `endCall()`           | Programmatically end a Retell call     |
+| `listRecentCalls()`   | Debug helper to list recent calls      |
+
+### Setting Up Retell
+
+1. Create a [Retell AI account](https://retellai.com)
+2. Create an Agent in the Retell dashboard
+3. Configure the agent's:
+   - LLM model and system prompt
+   - Voice settings (TTS voice)
+   - Webhook URL: `https://your-domain.com/webhooks/retell`
+4. Add credentials to `.env`:
+   ```env
+   RETELL_API_KEY=your_api_key
+   RETELL_AGENT_ID=your_agent_id
+   ```
+
+### Call Flow with Retell
+
+```
+Customer calls → Telnyx receives → Backend answers
+                                       ↓
+                              Register with Retell
+                                       ↓
+                        Retell AI handles conversation
+                                       ↓
+                     Live transcripts → Socket.io → Frontend
+                                       ↓
+                         Press 0 → Switch to Human Rep
+```
+
+---
+
 ## Development Phases
 
 | Phase | Name               | Status      | Description                             |
@@ -454,8 +509,8 @@ The backend responds to Telnyx webhooks with TeXML (XML-based call control):
 | 1     | Database Layer     | ✅ Complete | Prisma, pgvector, migrations, seeding   |
 | 2     | Backend Skeleton   | ✅ Complete | Express, Socket.io, Redis, health check |
 | 3     | Telephony - Telnyx | ✅ Complete | Incoming calls, webhooks, TeXML         |
-| 4     | Voice AI - Retell  | 🔜 Next     | AI agent, transcripts                   |
-| 5     | Copilot Brain      | ⏳ Pending  | AssemblyAI, pgvector RAG, suggestions   |
+| 4     | Voice AI - Retell  | ✅ Complete | Retell SDK, webhooks, live transcripts  |
+| 5     | Copilot Brain      | 🔜 Next     | AssemblyAI, pgvector RAG, suggestions   |
 | 6     | Frontend Polish    | ⏳ Pending  | UI refinements, animations              |
 | 7     | The Switch         | ⏳ Pending  | Real-time AI↔Human handoff              |
 | 8     | Text Chat          | ⏳ Pending  | Chat endpoint, unified messages         |
