@@ -1,152 +1,490 @@
 # Senpilot Customer Service Platform
 
-A sophisticated Human-in-the-Loop (HITL) customer service platform featuring AI Voice Agent and Copilot Assistant.
+A sophisticated **Human-in-the-Loop (HITL)** customer service platform featuring an AI Voice Agent and Copilot Assistant. The system uses a **Conference Bridge** architecture that allows seamless real-time switching between AI and human agents without dropping calls.
+
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Environment Variables](#environment-variables)
+- [Database Schema](#database-schema)
+- [Socket.io Events](#socketio-events)
+- [API Endpoints](#api-endpoints)
+- [Development Phases](#development-phases)
+- [Testing](#testing)
+- [Commands Reference](#commands-reference)
+
+---
 
 ## Features
 
-- 🤖 **AI Voice Agent** - Powered by Retell AI for low-latency voice conversations
-- 👤 **Copilot Assistant** - Real-time suggestions for human representatives
-- 🔄 **Seamless Switching** - Toggle between AI and human without dropping calls
-- 💬 **Multi-Channel** - Support for both voice calls and text chat
-- 📊 **Diagnostics** - Track switch events and conversation analytics
+| Feature                   | Description                                              | Status      |
+| ------------------------- | -------------------------------------------------------- | ----------- |
+| 🤖 **AI Voice Agent**     | Powered by Retell AI for low-latency voice conversations | 🔜 Phase 4  |
+| 👤 **Copilot Assistant**  | Real-time suggestions sidebar for human representatives  | 🔜 Phase 5  |
+| 🔄 **Seamless Switching** | Toggle between AI and human without dropping calls       | 🔜 Phase 7  |
+| 💬 **Multi-Channel**      | Support for both voice calls and text chat               | 🔜 Phase 8  |
+| 📊 **Diagnostics**        | Track switch events and conversation analytics           | 🔜 Phase 9  |
+| 🎯 **Agent Dashboard**    | Real-time transcript, copilot suggestions, control panel | ✅ UI Ready |
+| 🗣️ **Customer Widget**    | Chat window and voice call button for customers          | ✅ UI Ready |
+
+---
+
+## Architecture
+
+### High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         CUSTOMER                                    │
+│                    (Voice Call / Chat)                              │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │     TELNYX      │  ← Telephony Provider
+                    │  (Phone Network) │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+              ▼                             ▼
+    ┌─────────────────┐           ┌─────────────────┐
+    │   RETELL AI     │           │   YOUR BACKEND  │
+    │  (Voice Agent)  │           │    (Node.js)    │
+    │                 │           │                 │
+    │ • STT → LLM → TTS│  webhook │ • AssemblyAI    │
+    │ • Handles calls │ ────────► │ • pgvector RAG  │
+    │ • Live transcript│          │ • Redis Sessions│
+    └─────────────────┘           └────────┬────────┘
+                                           │
+                                           │ Socket.io
+                                           ▼
+                                  ┌─────────────────┐
+                                  │    FRONTEND     │
+                                  │ (React + Vite)  │
+                                  │                 │
+                                  │ • Agent Dashboard│
+                                  │ • Customer Widget│
+                                  └─────────────────┘
+```
+
+### The "Conference Bridge" Pattern
+
+Instead of forwarding calls (which causes drops), we use a conference room where participants are muted/unmuted:
+
+1. **Customer** calls in → placed in digital conference room
+2. **AI Agent** joins immediately (speaking)
+3. **Human Rep** joins same room (muted, listening)
+4. **Switch**: Mute AI, unmute Human (or vice versa)
+5. **Result**: No call drops, seamless handoff
+
+---
 
 ## Tech Stack
 
-| Component     | Technology                     |
-| ------------- | ------------------------------ |
-| Backend       | Node.js + Express + TypeScript |
-| Frontend      | React + Vite + TypeScript      |
-| Database      | PostgreSQL + pgvector          |
-| Cache         | Redis                          |
-| Telephony     | Telnyx                         |
-| Voice AI      | Retell AI                      |
-| Transcription | AssemblyAI                     |
-| Real-time     | Socket.io                      |
+| Layer             | Technology                     | Purpose                               |
+| ----------------- | ------------------------------ | ------------------------------------- |
+| **Backend**       | Node.js + Express + TypeScript | API server, webhook handlers          |
+| **Frontend**      | React 18 + Vite + TypeScript   | Agent dashboard, customer widget      |
+| **Database**      | PostgreSQL + pgvector          | Relational data + vector search       |
+| **Cache**         | Redis                          | Session state, real-time call context |
+| **ORM**           | Prisma                         | Type-safe database access             |
+| **Real-time**     | Socket.io                      | Push updates to frontend              |
+| **Telephony**     | Telnyx                         | Phone network, media streams          |
+| **Voice AI**      | Retell AI                      | STT + LLM + TTS in one                |
+| **Transcription** | AssemblyAI                     | Copilot transcript analysis           |
+| **Embeddings**    | OpenAI                         | Vector embeddings for RAG             |
+
+---
 
 ## Project Structure
 
 ```
+Senpilot-Customer-Service-App/
 ├── apps/
-│   ├── backend/          # Node.js API server
-│   └── web-client/       # React frontend
+│   ├── backend/                      # Node.js API Server
+│   │   ├── src/
+│   │   │   ├── config/
+│   │   │   │   └── env.ts            # Environment validation (Zod)
+│   │   │   ├── services/
+│   │   │   │   └── state/
+│   │   │   │       └── sessionStore.ts   # Redis session management
+│   │   │   ├── sockets/
+│   │   │   │   └── agentGateway.ts   # Socket.io event handlers
+│   │   │   ├── app.ts                # Express app setup
+│   │   │   └── server.ts             # Entry point, Socket.io init
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   └── web-client/                   # React Frontend
+│       ├── src/
+│       │   ├── components/
+│       │   │   ├── agent-dashboard/
+│       │   │   │   ├── ActiveCallBanner.tsx    # AI/Human status display
+│       │   │   │   ├── LiveTranscript.tsx      # Scrolling conversation
+│       │   │   │   ├── SidebarCopilot.tsx      # Suggestion cards
+│       │   │   │   └── ControlPanel.tsx        # Switch button + controls
+│       │   │   ├── customer-widget/
+│       │   │   │   ├── ChatWindow.tsx          # Text chat UI
+│       │   │   │   └── CallButton.tsx          # Voice call UI
+│       │   │   └── shared/
+│       │   │       └── ConnectionStatus.tsx    # Socket connection indicator
+│       │   ├── hooks/
+│       │   │   ├── useSocket.ts                # Socket.io connection (standalone)
+│       │   │   └── useCallState.ts             # Call state + socket (combined)
+│       │   ├── pages/
+│       │   │   ├── AgentPortal.tsx             # Human rep dashboard
+│       │   │   └── CustomerDemo.tsx            # Customer-facing UI
+│       │   ├── index.css                       # Global styles + CSS variables
+│       │   ├── main.tsx                        # React entry point
+│       │   ├── App.tsx                         # Router setup
+│       │   └── vite-env.d.ts                   # TypeScript declarations
+│       ├── index.html
+│       ├── package.json
+│       ├── tsconfig.json
+│       └── vite.config.ts
+│
 ├── packages/
-│   ├── database/         # Prisma ORM & migrations
-│   └── shared-types/     # Shared TypeScript interfaces
-├── docker-compose.yml    # Local dev services
-└── package.json          # npm workspaces config
+│   ├── database/                     # Prisma ORM
+│   │   ├── prisma/
+│   │   │   └── schema.prisma         # Database models
+│   │   ├── src/
+│   │   │   ├── index.ts              # Prisma client singleton
+│   │   │   └── seed.ts               # Test data seeder
+│   │   └── package.json
+│   │
+│   └── shared-types/                 # TypeScript Interfaces
+│       └── src/
+│           └── index.ts              # All shared types
+│
+├── docker-compose.yml                # PostgreSQL + Redis
+├── package.json                      # npm workspaces config
+├── .env                              # Environment variables (git-ignored)
+├── .env.example                      # Environment template
+├── .gitignore
+└── README.md
 ```
 
-## Prerequisites
-
-- Node.js 18+
-- npm 9+
-- Docker & Docker Compose
+---
 
 ## Getting Started
 
-### 1. Clone and Install
+### Prerequisites
+
+- **Node.js** 18+
+- **npm** 9+
+- **Docker Desktop** (for PostgreSQL + Redis)
+
+### 1. Install Dependencies
 
 ```bash
 git clone <repo-url>
-cd customer-service-platform
+cd Senpilot-Customer-Service-App
 npm install
 ```
 
-### 2. Environment Setup
+### 2. Start Docker Services
+
+```bash
+# Start PostgreSQL (port 5433) and Redis (port 6379)
+npm run docker:up
+```
+
+> **Note**: We use port 5433 for PostgreSQL to avoid conflicts with local installations.
+
+### 3. Environment Setup
 
 ```bash
 cp .env.example .env
-# Edit .env with your API keys (optional for Phase 0)
 ```
 
-### 3. Start Local Services
+Edit `.env` with your values. Minimum required:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
+REDIS_URL="redis://localhost:6379"
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+```
+
+### 4. Database Setup
 
 ```bash
-# Start Docker Desktop first, then:
-npm run docker:up
-
 # Generate Prisma client
 npm run db:generate
 
-# Run migrations
-npm run db:migrate
+# Run migrations (creates tables)
+cd packages/database
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
+npx prisma migrate dev --name init
 
 # Seed test data
-npm run db:seed
+npx tsx src/seed.ts
 ```
 
-### 4. Run Development Servers
+### 5. Run Development Servers
 
 ```bash
-# Start both backend and frontend
-npm run dev
+# Backend (http://localhost:3001)
+npm run dev:backend
 
-# Or run separately:
-npm run dev:backend  # http://localhost:3001
-npm run dev:web      # http://localhost:5173
+# Frontend (http://localhost:5173)
+npm run dev:web
 ```
 
-## API Endpoints
+### 6. Access the App
 
-| Endpoint           | Method | Description              |
-| ------------------ | ------ | ------------------------ |
-| `/health`          | GET    | Health check             |
-| `/api/call`        | POST   | Handle incoming calls    |
-| `/api/chat`        | POST   | Handle chat messages     |
-| `/api/switch`      | POST   | Toggle AI/Human mode     |
-| `/webhooks/telnyx` | POST   | Telnyx call events       |
-| `/webhooks/retell` | POST   | Retell transcript events |
+| URL                            | Description          |
+| ------------------------------ | -------------------- |
+| http://localhost:5173/agent    | Agent Dashboard      |
+| http://localhost:5173/customer | Customer Widget      |
+| http://localhost:3001/health   | Backend health check |
+
+---
 
 ## Environment Variables
 
-See `.env.example` for all required variables:
+| Variable               | Required | Description                           |
+| ---------------------- | -------- | ------------------------------------- |
+| `DATABASE_URL`         | ✅       | PostgreSQL connection string          |
+| `REDIS_URL`            | ✅       | Redis connection string               |
+| `PORT`                 | ✅       | Backend server port (default: 3001)   |
+| `NODE_ENV`             | ✅       | `development` / `production` / `test` |
+| `FRONTEND_URL`         | ✅       | Frontend URL for CORS                 |
+| `TELNYX_API_KEY`       | ❌       | Telnyx API key (Phase 3)              |
+| `TELNYX_PUBLIC_KEY`    | ❌       | Telnyx public key                     |
+| `TELNYX_CONNECTION_ID` | ❌       | Telnyx connection ID                  |
+| `TELNYX_PHONE_NUMBER`  | ❌       | Your Telnyx phone number              |
+| `RETELL_API_KEY`       | ❌       | Retell AI API key (Phase 4)           |
+| `RETELL_AGENT_ID`      | ❌       | Retell agent ID                       |
+| `ASSEMBLYAI_API_KEY`   | ❌       | AssemblyAI API key (Phase 5)          |
+| `OPENAI_API_KEY`       | ❌       | OpenAI API key for embeddings         |
+| `WEBHOOK_BASE_URL`     | ❌       | Public URL for webhooks (ngrok)       |
 
-**Required:**
+---
 
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
+## Database Schema
 
-**Optional (for full features):**
+### Models
 
-- `TELNYX_API_KEY` - Telnyx API credentials
-- `RETELL_API_KEY` - Retell AI API key
-- `ASSEMBLYAI_API_KEY` - AssemblyAI API key
-- `OPENAI_API_KEY` - OpenAI API key (for embeddings)
+```prisma
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  embedding vector(1536)?  // pgvector for semantic search
+  calls     Call[]
+  orders    Order[]
+}
 
-## Development
+model Call {
+  id         String     @id  // Telnyx Call SID
+  customerId String?
+  mode       CallMode   @default(AI_AGENT)  // AI_AGENT | HUMAN_REP
+  status     CallStatus @default(ACTIVE)
+  transcript Json?
+  switchLogs SwitchLog[]
+  startedAt  DateTime
+  endedAt    DateTime?
+}
 
-### Commands
+model SwitchLog {
+  id         String   @id @default(uuid())
+  callId     String
+  direction  String   // "AI_TO_HUMAN" | "HUMAN_TO_AI"
+  reason     String?  // "CUSTOMER_REQUEST", "SENTIMENT_NEGATIVE", etc.
+  switchedAt DateTime
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  customerId String
+  status     OrderStatus // PENDING | PROCESSING | SHIPPED | DELIVERED | CANCELLED
+  total      Decimal
+  items      Json
+}
+
+model KnowledgeArticle {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  category  String
+  embedding vector(1536)?  // For RAG search
+}
+```
+
+### Seeded Test Data
+
+- 3 customers (John Doe, Jane Smith, Bob Wilson)
+- 3 orders with items
+- 4 knowledge articles (Return Policy, Shipping, Refunds, Warranty)
+
+---
+
+## Socket.io Events
+
+### Client → Server
+
+| Event                 | Payload                 | Description                  |
+| --------------------- | ----------------------- | ---------------------------- |
+| `agent:join`          | `agentId: string`       | Agent joins their room       |
+| `call:join`           | `callId: string`        | Join a call room for updates |
+| `call:leave`          | `callId: string`        | Leave a call room            |
+| `call:request_switch` | `{ callId, direction }` | Request AI↔Human switch      |
+
+### Server → Client
+
+| Event                | Payload                    | Description            |
+| -------------------- | -------------------------- | ---------------------- |
+| `call:state_update`  | `CallStateUpdate`          | Call state changed     |
+| `transcript:update`  | `TranscriptEntry`          | New transcript entry   |
+| `copilot:suggestion` | `CopilotSuggestion`        | New copilot suggestion |
+| `call:switch`        | `{ direction, timestamp }` | Switch completed       |
+| `call:end`           | —                          | Call ended             |
+
+### TypeScript Types
+
+```typescript
+interface CallStateUpdate {
+  callId: string;
+  activeSpeaker: "AI" | "HUMAN" | "CUSTOMER";
+  isMuted: boolean;
+  mode: "AI_AGENT" | "HUMAN_REP";
+}
+
+interface TranscriptEntry {
+  speaker: "AI" | "HUMAN" | "CUSTOMER";
+  text: string;
+  timestamp: number;
+}
+
+interface CopilotSuggestion {
+  type: "INFO" | "ACTION";
+  title: string;
+  content: string;
+  confidenceScore: number;
+  metadata?: { customerId?; orderId?; policyId? };
+}
+```
+
+---
+
+## API Endpoints
+
+| Endpoint           | Method | Description              | Status         |
+| ------------------ | ------ | ------------------------ | -------------- |
+| `/health`          | GET    | Health check             | ✅ Implemented |
+| `/api/call`        | POST   | Handle incoming calls    | 🔜 Phase 3     |
+| `/api/chat`        | POST   | Handle chat messages     | 🔜 Phase 8     |
+| `/api/switch`      | POST   | Toggle AI/Human mode     | 🔜 Phase 7     |
+| `/webhooks/telnyx` | POST   | Telnyx call events       | 🔜 Phase 3     |
+| `/webhooks/retell` | POST   | Retell transcript events | 🔜 Phase 4     |
+
+---
+
+## Development Phases
+
+| Phase | Name               | Status      | Description                             |
+| ----- | ------------------ | ----------- | --------------------------------------- |
+| 0     | Foundation         | ✅ Complete | Monorepo, Docker, TypeScript setup      |
+| 1     | Database Layer     | ✅ Complete | Prisma, pgvector, migrations, seeding   |
+| 2     | Backend Skeleton   | ✅ Complete | Express, Socket.io, Redis, health check |
+| 3     | Telephony - Telnyx | 🔜 Next     | Incoming calls, webhooks                |
+| 4     | Voice AI - Retell  | ⏳ Pending  | AI agent, transcripts                   |
+| 5     | Copilot Brain      | ⏳ Pending  | AssemblyAI, pgvector RAG, suggestions   |
+| 6     | Frontend Polish    | ⏳ Pending  | UI refinements, animations              |
+| 7     | The Switch         | ⏳ Pending  | Real-time AI↔Human handoff              |
+| 8     | Text Chat          | ⏳ Pending  | Chat endpoint, unified messages         |
+| 9     | Diagnostics        | ⏳ Pending  | Analytics, switch tracking              |
+
+---
+
+## Testing
+
+### Switch Trigger Mechanisms
+
+| Channel          | Switch to Human                   | Switch to AI                |
+| ---------------- | --------------------------------- | --------------------------- |
+| **Voice**        | Say "I want to speak to a human"  | Say "Go back to the AI"     |
+| **Voice (DTMF)** | Press `0`                         | Press `*`                   |
+| **Chat**         | Type `/human` or "speak to agent" | Type `/ai` or "back to bot" |
+
+### Test Scripts Location
+
+```
+test-scripts/
+├── voice/
+│   ├── 01-happy-path-ai-resolves.md
+│   ├── 02-escalation-to-human.md
+│   └── 03-multiple-switches.md
+├── chat/
+│   └── ...
+└── edge-cases/
+    └── ...
+```
+
+---
+
+## Commands Reference
 
 ```bash
-npm run dev           # Start all services
-npm run build         # Build all packages
-npm run db:studio     # Open Prisma Studio
-npm run docker:down   # Stop Docker services
-npm run clean         # Remove node_modules
+# Development
+npm run dev              # Start all services
+npm run dev:backend      # Start backend only (port 3001)
+npm run dev:web          # Start frontend only (port 5173)
+
+# Database
+npm run db:generate      # Generate Prisma client
+npm run db:migrate       # Run migrations
+npm run db:seed          # Seed test data
+npm run db:studio        # Open Prisma Studio
+
+# Docker
+npm run docker:up        # Start PostgreSQL + Redis
+npm run docker:down      # Stop Docker services
+
+# Utilities
+npm run build            # Build all packages
+npm run clean            # Remove node_modules
 ```
 
-### Testing Switches
+---
 
-During a call:
+## Troubleshooting
 
-- **Voice**: Say "I want to speak to a human" or press `0`
-- **Chat**: Type `/human` or "speak to agent"
+### Port 5432 Already in Use
 
-To switch back:
+PostgreSQL is configured to use port **5433** to avoid conflicts. Ensure your `DATABASE_URL` uses the correct port:
 
-- **Voice**: Say "Go back to the AI" or press `*`
-- **Chat**: Type `/ai` or "back to bot"
-
-## Architecture
-
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
 ```
-Customer Call → Telnyx → Retell AI (Voice Agent)
-                    ↘
-                     Your Backend (Node.js)
-                         ├── AssemblyAI (Transcription)
-                         ├── pgvector (Customer Lookup)
-                         └── Socket.io → Frontend (Copilot Sidebar)
+
+### Prisma Can't Find .env
+
+Symlinks are created from `packages/database/.env` and `apps/backend/.env` to the root `.env`. If issues persist, run commands from the package directory with the env var exported:
+
+```bash
+cd packages/database
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
+npx prisma migrate dev
 ```
+
+### Socket.io Not Connecting
+
+Check that:
+
+1. Backend is running on port 3001
+2. Frontend Vite proxy is configured (see `vite.config.ts`)
+3. `FRONTEND_URL` in `.env` matches frontend URL
+
+---
 
 ## License
 
