@@ -2,12 +2,62 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  background: var(--bg-secondary);
 }
 
 /* Header with tabs */
 .header {
   padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.llmBadge {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.05em;
+}
+
+.refreshBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .tabs {
@@ -40,6 +90,16 @@
 
 .tabIcon {
   font-size: 0.875rem;
+}
+
+.tabLabel {
+  display: none;
+}
+
+@media (min-width: 1400px) {
+  .tabLabel {
+    display: inline;
+  }
 }
 
 .tabBadge {
@@ -388,4 +448,104 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--accent-primary);
+}
+
+/* Knowledge base tab */
+.knowledge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.quickSearches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-md);
+  align-items: center;
+}
+
+.quickLabel {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  width: 100%;
+  margin-bottom: var(--spacing-xs);
+}
+
+.quickSearches button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.quickSearches button:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+/* Knowledge Card */
+.knowledgeCard {
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.knowledgeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+}
+
+.category {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.relevance {
+  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+}
+
+.knowledgeTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.knowledgeContent {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Emergency alert styling */
+.alertCard.emergency {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: emergencyPulse 2s ease-in-out infinite;
+}
+
+.alertCard.emergency .alertTitle {
+  color: #ef4444;
+}
+
+@keyframes emergencyPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
 }

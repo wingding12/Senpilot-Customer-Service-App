@@ -9,6 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@types/uuid": "^10.0.0",
     "assemblyai": "^4.19.0",
     "cors": "^2.8.5",

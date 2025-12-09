@@ -160,7 +160,7 @@ export default function AgentPortal() {
 
         {/* Right: Copilot Sidebar */}
         <aside className={styles.copilotPanel}>
-          <SidebarCopilot suggestions={suggestions} />
+          <SidebarCopilot suggestions={suggestions} sessionId={callState.callId} />
         </aside>
       </div>
 

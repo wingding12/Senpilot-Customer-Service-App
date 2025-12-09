@@ -43,6 +43,9 @@ const envSchema = z.object({
   // OpenAI (optional for Phase 0)
   OPENAI_API_KEY: z.string().optional(),
   
+  // Google Gemini (for AI chat and copilot)
+  GEMINI_API_KEY: z.string().optional(),
+  
   // Webhooks (optional for Phase 0)
   WEBHOOK_BASE_URL: z.string().url().optional(),
 });
@@ -66,6 +69,7 @@ function validateEnv() {
     if (!env.RETELL_API_KEY) missingOptional.push('RETELL_API_KEY');
     if (!env.ASSEMBLYAI_API_KEY) missingOptional.push('ASSEMBLYAI_API_KEY');
     if (!env.OPENAI_API_KEY) missingOptional.push('OPENAI_API_KEY');
+    if (!env.GEMINI_API_KEY) missingOptional.push('GEMINI_API_KEY');
     if (!env.WEBHOOK_BASE_URL) missingOptional.push('WEBHOOK_BASE_URL');
     
     if (missingOptional.length > 0) {
@@ -95,4 +99,8 @@ export function hasAssemblyAIConfig(): boolean {
 
 export function hasOpenAIConfig(): boolean {
   return !!env.OPENAI_API_KEY;
+}
+
+export function hasGeminiConfig(): boolean {
+  return !!env.GEMINI_API_KEY;
 }
