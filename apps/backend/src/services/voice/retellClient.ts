@@ -10,6 +10,7 @@
  */
 
 import Retell from "retell-sdk";
+import { createHmac } from "crypto";
 import { env, hasRetellConfig } from "../../config/env.js";
 
 // Singleton Retell client
@@ -158,7 +159,10 @@ export async function listRecentCalls(limit = 10): Promise<
   const client = getRetellClient();
   const response = await client.call.list({ limit });
 
-  return response.map((call) => ({
+  // Handle both array and paginated response formats
+  const calls = Array.isArray(response) ? response : [];
+
+  return calls.map((call) => ({
     call_id: call.call_id,
     agent_id: call.agent_id,
     call_status: call.call_status,
@@ -181,9 +185,7 @@ export function verifyWebhookSignature(
   apiKey: string
 ): boolean {
   // Retell uses HMAC-SHA256 for webhook signatures
-  const crypto = require("crypto");
-  const expectedSignature = crypto
-    .createHmac("sha256", apiKey)
+  const expectedSignature = createHmac("sha256", apiKey)
     .update(payload)
     .digest("hex");
 
