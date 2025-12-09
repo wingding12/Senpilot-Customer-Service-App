@@ -352,10 +352,17 @@ router.post("/gather", async (req: Request, res: Response) => {
 
   // Process the same as dtmf.received
   if (Digits === "0") {
+    // Switch to human
     await handleSwitch(callId, "AI_TO_HUMAN", "DTMF_GATHER");
     res.set("Content-Type", "application/xml");
     res.send(TeXML.say("Connecting you with a human representative."));
+  } else if (Digits === "*") {
+    // Switch back to AI
+    await handleSwitch(callId, "HUMAN_TO_AI", "DTMF_GATHER");
+    res.set("Content-Type", "application/xml");
+    res.send(TeXML.say("Connecting you back to our AI assistant."));
   } else {
+    // Unknown digit - continue conversation
     res.set("Content-Type", "application/xml");
     res.send(TeXML.say("I didn't understand that. How can I help you?"));
   }
