@@ -1,0 +1,78 @@
+import Redis from 'ioredis';
+import { env } from '../../config/env.js';
+import type { CallSession } from 'shared-types';
+
+let redis: Redis | null = null;
+
+export async function connectRedis(): Promise<Redis> {
+  if (redis) return redis;
+  
+  redis = new Redis(env.REDIS_URL);
+  
+  redis.on('connect', () => {
+    console.log('✅ Connected to Redis');
+  });
+  
+  redis.on('error', (err) => {
+    console.error('❌ Redis error:', err);
+  });
+  
+  return redis;
+}
+
+export function getRedis(): Redis {
+  if (!redis) {
+    throw new Error('Redis not connected. Call connectRedis() first.');
+  }
+  return redis;
+}
+
+// Session management functions
+const SESSION_PREFIX = 'session:';
+const SESSION_TTL = 60 * 60 * 2; // 2 hours
+
+export async function createSession(callId: string, session: CallSession): Promise<void> {
+  const redis = getRedis();
+  await redis.setex(
+    `${SESSION_PREFIX}${callId}`,
+    SESSION_TTL,
+    JSON.stringify(session)
+  );
+}
+
+export async function getSession(callId: string): Promise<CallSession | null> {
+  const redis = getRedis();
+  const data = await redis.get(`${SESSION_PREFIX}${callId}`);
+  return data ? JSON.parse(data) : null;
+}
+
+export async function updateSession(
+  callId: string, 
+  updates: Partial<CallSession>
+): Promise<CallSession | null> {
+  const current = await getSession(callId);
+  if (!current) return null;
+  
+  const updated = { ...current, ...updates };
+  await createSession(callId, updated);
+  return updated;
+}
+
+export async function deleteSession(callId: string): Promise<void> {
+  const redis = getRedis();
+  await redis.del(`${SESSION_PREFIX}${callId}`);
+}
+
+export async function appendTranscript(
+  callId: string, 
+  speaker: 'AI' | 'HUMAN' | 'CUSTOMER',
+  text: string
+): Promise<void> {
+  const session = await getSession(callId);
+  if (!session) return;
+  
+  const entry = { speaker, text, timestamp: Date.now() };
+  session.transcript.push(entry);
+  await createSession(callId, session);
+}
+

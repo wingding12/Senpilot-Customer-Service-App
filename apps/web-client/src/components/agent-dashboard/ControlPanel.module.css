@@ -1,0 +1,126 @@
+.panel {
+  padding: var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.modeIndicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.modeLabel {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.modeValue {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.modeValue.ai {
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--status-ai);
+}
+
+.modeValue.human {
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--status-human);
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.switchButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.switchButton.takeOver {
+  background: linear-gradient(135deg, var(--status-human) 0%, #00a88a 100%);
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+}
+
+.switchButton.takeOver:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 212, 170, 0.4);
+}
+
+.switchButton.handBack {
+  background: linear-gradient(135deg, var(--status-ai) 0%, #5b21b6 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.switchButton.handBack:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+}
+
+.switchButton:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  box-shadow: none;
+  transform: none;
+}
+
+.buttonIcon {
+  font-size: 1.25rem;
+}
+
+.quickActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.actionButton {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.actionButton:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.actionButton.endCall {
+  color: var(--accent-danger);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.actionButton.endCall:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.warning {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--accent-warning);
+  text-align: center;
+}
+

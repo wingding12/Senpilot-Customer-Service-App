@@ -1,0 +1,136 @@
+// ===========================================
+// Prisma Schema for Customer Service Platform
+// ===========================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// -----------------------------
+// Customer Model
+// -----------------------------
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  
+  // Vector embedding for semantic search
+  embedding Unsupported("vector(1536)")?
+  
+  // Relations
+  calls     Call[]
+  orders    Order[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+}
+
+// -----------------------------
+// Order Model
+// -----------------------------
+model Order {
+  id         String      @id @default(uuid())
+  customerId String
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  
+  status     OrderStatus @default(PENDING)
+  total      Decimal     @db.Decimal(10, 2)
+  items      Json        // Array of OrderItem
+  
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// -----------------------------
+// Call Model
+// -----------------------------
+model Call {
+  id         String     @id // Telnyx Call SID
+  customerId String?
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  
+  mode       CallMode   @default(AI_AGENT)
+  status     CallStatus @default(ACTIVE)
+  
+  // Full transcript stored as JSON
+  transcript Json?
+  
+  // Analytics
+  switchLogs SwitchLog[]
+  
+  startedAt  DateTime   @default(now())
+  endedAt    DateTime?
+  
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@map("calls")
+}
+
+enum CallMode {
+  AI_AGENT
+  HUMAN_REP
+}
+
+enum CallStatus {
+  RINGING
+  ACTIVE
+  ON_HOLD
+  ENDED
+}
+
+// -----------------------------
+// Switch Log Model (Diagnostics)
+// -----------------------------
+model SwitchLog {
+  id         String   @id @default(uuid())
+  callId     String
+  call       Call     @relation(fields: [callId], references: [id])
+  
+  direction  String   // "AI_TO_HUMAN" or "HUMAN_TO_AI"
+  reason     String?  // Optional: "CUSTOMER_REQUEST", "SENTIMENT_NEGATIVE", etc.
+  
+  switchedAt DateTime @default(now())
+
+  @@index([callId])
+  @@map("switch_logs")
+}
+
+// -----------------------------
+// Knowledge Base (for RAG)
+// -----------------------------
+model KnowledgeArticle {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  category  String
+  
+  // Vector embedding for semantic search
+  embedding Unsupported("vector(1536)")?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_articles")
+}
+
