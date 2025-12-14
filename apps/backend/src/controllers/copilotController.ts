@@ -21,16 +21,35 @@ const router = Router();
  * Check copilot service status
  */
 router.get("/status", async (_req: Request, res: Response) => {
+  // Check if Retell is configured for voice
+  const { hasRetellConfig } = await import("../config/env.js");
+  const retellAvailable = hasRetellConfig();
+
   res.json({
     available: true,
     llmEnabled: isLLMAvailable(),
     llmProvider: isLLMAvailable() ? "gemini" : "none",
+    unifiedAI: true,
+    architecture: {
+      description: "Voice and Chat use the same AI personality and knowledge base",
+      voice: {
+        provider: retellAvailable ? "retell" : "not_configured",
+        status: retellAvailable ? "active" : "requires_config",
+      },
+      chat: {
+        provider: isLLMAvailable() ? "gemini" : "fallback",
+        status: isLLMAvailable() ? "active" : "limited",
+      },
+      knowledgeBase: "shared",
+    },
     features: {
       suggestions: true,
       knowledgeBase: true,
       sentimentAnalysis: true,
       intentDetection: true,
       dynamicResponses: isLLMAvailable(),
+      voiceCalls: retellAvailable,
+      textChat: true,
     },
   });
 });

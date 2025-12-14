@@ -128,6 +128,25 @@ export function useChatSocket() {
     setMessages((prev) => [...prev, message]);
   }, []);
 
+  // Add an assistant message (from API response when not received via socket)
+  const addAssistantMessage = useCallback((content: string, isHuman = false) => {
+    const message: ChatMessage = {
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      content,
+      timestamp: Date.now(),
+      isHuman,
+    };
+    setMessages((prev) => {
+      // Check for duplicate content to avoid showing the same message twice
+      const alreadyExists = prev.some(
+        (m) => m.role === 'assistant' && m.content === content
+      );
+      if (alreadyExists) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
   // Clear all messages (for new sessions)
   const clearMessages = useCallback(() => {
     setMessages([]);
@@ -143,6 +162,7 @@ export function useChatSocket() {
     agentMode,
     joinSession,
     addLocalMessage,
+    addAssistantMessage,
     clearMessages,
     setAgentMode,
   };

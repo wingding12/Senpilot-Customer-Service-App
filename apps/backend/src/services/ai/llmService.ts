@@ -1,17 +1,25 @@
 /**
- * LLM Service - Gemini-Powered AI Agent and Copilot
+ * LLM Service - Unified AI Agent and Copilot
  * 
- * Uses Google's Gemini model for:
- * 1. AI Agent - Intelligent customer responses (text chat & voice)
- * 2. AI Copilot - Dynamic real-time suggestions for human reps
+ * Uses the SAME prompts and knowledge base as Retell voice agent
+ * to ensure consistent behavior across voice and text channels.
  * 
- * Specialized for utility company customer service.
+ * - Text Chat: Uses Gemini with Retell's prompts
+ * - Voice Calls: Uses Retell's native voice AI
+ * 
+ * Both share identical personality, knowledge base, and policies.
  */
 
 import { GoogleGenerativeAI, GenerativeModel, Content } from "@google/generative-ai";
-import { env, hasGeminiConfig } from "../../config/env.js";
+import { env, hasGeminiConfig, hasRetellConfig } from "../../config/env.js";
 import { smartSearch, type RelevantArticle } from "../copilot/ragService.js";
 import type { TranscriptEntry, CopilotSuggestion } from "shared-types";
+// Import the SAME prompts used by Retell voice agent
+import { 
+  UTILITY_VOICE_AGENT_PROMPT, 
+  UTILITY_KNOWLEDGE_BASE,
+  getFullVoiceAgentPrompt,
+} from "../voice/retellClient.js";
 
 // Singleton Gemini client
 let genAI: GoogleGenerativeAI | null = null;
@@ -33,7 +41,7 @@ function getAgentModel(): GenerativeModel {
     const client = getGeminiClient();
     agentModel = client.getGenerativeModel({
       model: "gemini-1.5-flash",
-      systemInstruction: AGENT_SYSTEM_PROMPT,
+      systemInstruction: UNIFIED_AGENT_PROMPT,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 500,
@@ -61,46 +69,50 @@ function getCopilotModel(): GenerativeModel {
 }
 
 // ===========================================
-// System Prompts
+// Unified System Prompts (Same as Retell)
 // ===========================================
 
-const AGENT_SYSTEM_PROMPT = `You are a friendly AI customer service assistant for a utility company (electricity and gas). Your name is "Utility Assistant".
+/**
+ * Unified agent prompt - adapts Retell's voice prompt for text chat
+ * Uses the SAME knowledge base and personality
+ */
+const UNIFIED_AGENT_PROMPT = `You are a friendly AI customer service assistant for a utility company (electricity and gas). Your name is "Utility Assistant".
 
-SPECIALIZATION: Utility Customer Support
+CHANNEL ADAPTATION:
+You handle both voice calls and text chats. For text chat:
+- Use proper formatting (bullet points, line breaks)
+- Can be slightly more detailed than voice
+- Include relevant phone numbers and links when helpful
+
+YOUR SPECIALIZATION - Utility Customer Support:
 - Billing questions and bill explanations
-- Payment options and arrangements
+- Payment options and arrangements  
 - Power outages and service interruptions
 - Starting, stopping, or transferring service
-- Meter questions and smart meters
-- Energy efficiency and rebate programs
-- Payment assistance programs (LIHEAP, hardship funds)
+- Meter questions
+- Energy efficiency programs
+- Payment assistance programs
 
-KEY POLICIES:
-- Bills due 21 days after statement. Late fee: $10 or 1.5%.
-- Payment methods: Online (free), Auto-pay ($2/mo discount), Phone ($2.50), Mail.
-- New service: $35 standard, $75 same-day. Requires ID + SSN or $200 deposit.
-- Reconnection: Pay balance + $50 fee ($100 same-day).
-- Payment plans: 3-12 months. Must stay current on new charges.
-
-EMERGENCY PROTOCOL (GAS):
-If customer mentions gas smell, leak, rotten egg odor:
+EMERGENCY PROTOCOL - GAS:
+If customer mentions gas smell, leak, or rotten egg odor:
 1. IMMEDIATELY tell them to leave the building
-2. Do NOT operate any electrical switches
+2. Do NOT operate any electrical switches or phones inside
 3. Call 911 and 1-800-GAS-LEAK from outside
 4. This is the HIGHEST PRIORITY - address it before anything else
 
-RESPONSE STYLE:
-- Be concise: 2-3 sentences for simple questions
-- Use bullet points for lists or options
-- Be empathetic and solution-focused
-- If you can't help, offer to connect to a human representative
-- Don't make up information - say "I'd need to verify that" if unsure
+CONVERSATION STYLE:
+- Greet warmly on first message
+- Be empathetic: "I understand that's frustrating..."
+- Confirm understanding: "So you're asking about..."
+- Offer clear next steps
+- If you can't help: "Let me connect you with a representative who can help with that."
 
-LIMITATIONS:
-- Cannot access actual customer accounts
+LIMITATIONS - Be honest:
+- Cannot access actual account information
 - Cannot process real payments
-- Cannot dispatch technicians
-- Cannot promise credits over $25 without supervisor`;
+- Offer to transfer to a human when needed
+
+${UTILITY_KNOWLEDGE_BASE}`;
 
 const COPILOT_SYSTEM_PROMPT = `You are an AI copilot assisting a human customer service representative at a utility company. Provide brief, actionable insights.
 
@@ -131,7 +143,9 @@ ONLY PROVIDE NEW INSIGHTS when:
 - A new topic/intent is detected
 - Action is needed from the rep
 
-Keep snippets VERY brief - just the essential policy point, not full explanations.`;
+Keep snippets VERY brief - just the essential policy point, not full explanations.
+
+${UTILITY_KNOWLEDGE_BASE}`;
 
 // ===========================================
 // Conversation Context
@@ -339,28 +353,28 @@ async function generateGeminiAgentResponse(
     currentMessage = "(Customer just returned from speaking with a human representative)";
   }
   
-  // Search knowledge base
+  // Search database for additional context (supplements the built-in knowledge base)
   const articles = await smartSearch(currentMessage, 2);
-  let kbContext = "";
-  if (articles.length > 0 && articles[0].similarity > 0.5) {
-    kbContext = "\n\nRELEVANT INFO:\n" + 
-      articles.slice(0, 2).map(a => `• ${a.title}: ${a.content.substring(0, 150)}`).join("\n");
+  let dynamicContext = "";
+  if (articles.length > 0 && articles[0].similarity > 0.6) {
+    dynamicContext = "\n\nADDITIONAL CONTEXT FROM DATABASE:\n" + 
+      articles.slice(0, 2).map(a => `• ${a.title}: ${a.content.substring(0, 200)}`).join("\n");
   }
   
-  // Build the prompt
-  const prompt = `${AGENT_SYSTEM_PROMPT}
+  // Build the prompt using unified agent prompt (includes knowledge base)
+  const prompt = `${UNIFIED_AGENT_PROMPT}
 
 ${conversationHistory}CUSTOMER'S CURRENT MESSAGE: ${currentMessage}
-${kbContext}
+${dynamicContext}
 ${context.customerSentiment === 'frustrated' ? '\n⚠️ Customer seems frustrated - be extra empathetic.\n' : ''}
-Respond naturally as the utility assistant. Be helpful and concise.`;
+Respond naturally as the utility assistant. Be helpful and concise. For text chat, you may use formatting like bullet points.`;
 
-  console.log(`🤖 Gemini request for session, transcript length: ${transcript.length}`);
+  console.log(`🤖 Retell-unified Gemini request, transcript: ${transcript.length} msgs`);
   
   const result = await model.generateContent(prompt);
   const responseText = result.response.text();
   
-  console.log(`✅ Gemini response: ${responseText.substring(0, 100)}...`);
+  console.log(`✅ AI response: ${responseText.substring(0, 100)}...`);
   
   // Check if response suggests escalation to human
   const lowerResponse = responseText.toLowerCase();

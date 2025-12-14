@@ -1,8 +1,10 @@
 .portal {
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
+  overflow: hidden;
 }
 
 /* ==================== Header ==================== */
@@ -170,6 +172,7 @@
 /* ==================== Main Content ==================== */
 .mainWrapper {
   flex: 1;
+  min-height: 0; /* Critical: allows flex child to shrink below content size */
   display: grid;
   grid-template-columns: 260px 1fr 360px;
   overflow: hidden;
@@ -177,7 +180,8 @@
 
 /* Queue Panel (Left) */
 .queuePanel {
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Conversation Panel (Center) */
@@ -187,18 +191,21 @@
   border-left: 1px solid var(--border-color);
   border-right: 1px solid var(--border-color);
   overflow: hidden;
+  min-height: 0; /* Critical for nested flex scrolling */
 }
 
 .transcriptWrapper {
   flex: 1;
-  min-height: 0; /* Important for flex children with overflow */
-  overflow: hidden;
+  min-height: 0; /* Critical: allows flex child to shrink below content size */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Copilot Panel (Right) */
 .copilotPanel {
   background: var(--bg-secondary);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ==================== Responsive ==================== */

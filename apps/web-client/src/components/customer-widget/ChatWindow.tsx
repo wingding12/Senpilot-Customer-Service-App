@@ -19,6 +19,7 @@ export default function ChatWindow() {
     agentMode,
     joinSession,
     addLocalMessage,
+    addAssistantMessage,
     setAgentMode,
   } = useChatSocket();
 
@@ -51,8 +52,11 @@ export default function ChatWindow() {
 
       const data = await response.json();
 
+      // Check if this is a new session (first message)
+      const isNewSession = data.sessionId && data.sessionId !== sessionId;
+      
       // Join the session room if this is a new session
-      if (data.sessionId && data.sessionId !== sessionId) {
+      if (isNewSession) {
         joinSession(data.sessionId);
       }
 
@@ -61,12 +65,16 @@ export default function ChatWindow() {
         setAgentMode('HUMAN');
       }
 
-      // Note: We don't add the assistant message here anymore.
-      // It will come through the Socket.io transcript:update event.
-      // However, if socket isn't connected, fall back to adding it locally.
-      if (!isConnected) {
-        // Fallback for when socket isn't connected
-        addLocalMessage(data.reply || 'Sorry, I could not process that.');
+      // Add the AI reply to messages
+      // For new sessions, we MUST add locally because we weren't in the room 
+      // when the message was emitted. For existing sessions with socket connected,
+      // we'll receive it via Socket.io, but adding it here too won't hurt
+      // because addAssistantMessage deduplicates by content.
+      if (data.reply && data.reply.trim()) {
+        // Small delay to ensure it appears after the customer's message
+        setTimeout(() => {
+          addAssistantMessage(data.reply, false);
+        }, 100);
       }
 
     } catch (error) {

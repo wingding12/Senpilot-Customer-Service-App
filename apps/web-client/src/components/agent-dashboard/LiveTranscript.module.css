@@ -1,6 +1,6 @@
 .container {
-  flex: 1;
-  min-height: 0; /* Important for flex children with overflow */
+  height: 100%;
+  min-height: 0; /* Critical for flex children with overflow */
   overflow-y: auto;
   padding: var(--spacing-lg);
   background: var(--bg-primary);
