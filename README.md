@@ -15,11 +15,13 @@
 This platform revolutionizes customer service by combining cutting-edge AI technology with human expertise through a **Human-in-the-Loop (HITL)** architecture. Unlike traditional systems that force a choice between AI chatbots or human agents, our platform enables **seamless real-time switching** between both, preserving full conversation context without dropping calls or losing data.
 
 ### **The Problem**
+
 - Pure AI solutions are fast but lack empathy and can't handle complex edge cases
 - Pure human support is expensive, slow to scale, and suffers from inconsistent quality
 - Traditional call forwarding systems drop context and frustrate customers
 
 ### **Our Solution**
+
 - **70% of inquiries resolved by AI** with instant response times
 - **Intelligent escalation** to human agents when complexity requires it
 - **Zero context loss** during handoffs using our Conference Bridge pattern
@@ -35,6 +37,7 @@ This platform revolutionizes customer service by combining cutting-edge AI techn
 <td width="50%">
 
 ### 🤖 **AI Voice Agent**
+
 - **Ultra-low latency**: <500ms response time
 - **Natural conversations**: Handles interruptions naturally
 - **Specialized knowledge**: Utility industry expert
@@ -45,6 +48,7 @@ This platform revolutionizes customer service by combining cutting-edge AI techn
 <td width="50%">
 
 ### 💬 **AI Text Chat**
+
 - **Context-aware responses** using Gemini LLM
 - **Knowledge base integration** via RAG pipeline
 - **Multi-turn conversations** with full history
@@ -57,6 +61,7 @@ This platform revolutionizes customer service by combining cutting-edge AI techn
 <td width="50%">
 
 ### 👤 **AI Copilot for Agents**
+
 - **Real-time suggestions** as conversations flow
 - **Sentiment analysis** detects customer frustration
 - **Policy snippets** for instant reference
@@ -67,6 +72,7 @@ This platform revolutionizes customer service by combining cutting-edge AI techn
 <td width="50%">
 
 ### 🔄 **Seamless AI↔Human Switching**
+
 - **Conference Bridge pattern**: No call drops
 - **One-click handoff** in agent dashboard
 - **Customer-initiated**: "I want to speak to a human"
@@ -78,6 +84,7 @@ This platform revolutionizes customer service by combining cutting-edge AI techn
 </table>
 
 ### 📊 **Enterprise Analytics**
+
 - Real-time dashboard with live metrics
 - Switch tracking and resolution analytics
 - Performance monitoring and SLA tracking
@@ -205,6 +212,7 @@ Our proprietary approach to seamless handoffs:
 ```
 
 **Benefits:**
+
 - ✅ No call reconnection required
 - ✅ No context loss during handoff
 - ✅ Sub-second switching time
@@ -218,10 +226,10 @@ Our proprietary approach to seamless handoffs:
 ### **Prerequisites**
 
 - **Node.js** 18+ and **npm** 9+
-- **Docker Desktop** (for PostgreSQL + Redis)
+- **Docker Desktop** (optional - for PostgreSQL + Redis)
 - **API Keys** (see Environment Variables section)
 
-### **Quick Start (5 minutes)**
+### **Quick Start (3 minutes)**
 
 ```bash
 # 1. Clone the repository
@@ -231,14 +239,29 @@ cd Senpilot-Customer-Service-App
 # 2. Install dependencies
 npm install
 
-# 3. Start infrastructure services
-npm run docker:up
-
-# 4. Set up environment variables
+# 3. Set up environment variables
 cp .env.example .env
 # Edit .env with your API keys (see below)
 
-# 5. Initialize database
+# 4. Start the development servers
+npm run dev
+```
+
+That's it! The app will start with:
+
+- **Frontend**: http://localhost:5173
+- **Backend**: http://localhost:3001
+- **Storage**: In-memory (works without Docker)
+
+### **With Docker (Recommended for Full Features)**
+
+For persistent data storage and full analytics:
+
+```bash
+# Start PostgreSQL + Redis containers
+docker-compose up -d
+
+# Initialize the database
 npm run db:generate
 cd packages/database
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
@@ -246,48 +269,90 @@ npx prisma migrate dev --name init
 npx tsx src/seed.ts
 cd ../..
 
-# 6. Start development servers
-npm run dev:backend &   # Backend at http://localhost:3001
-npm run dev:web        # Frontend at http://localhost:5173
+# Start the app
+npm run dev
 ```
 
 ### **Access the Platform**
 
-| URL | Description |
-|-----|-------------|
-| [`http://localhost:5173/agent`](http://localhost:5173/agent) | Agent Dashboard (main UI) |
-| [`http://localhost:5173/customer`](http://localhost:5173/customer) | Customer Widget Demo |
-| [`http://localhost:3001/health`](http://localhost:3001/health) | Backend Health Check |
-| [`http://localhost:3001/api/analytics/dashboard`](http://localhost:3001/api/analytics/dashboard) | Live Metrics API |
+| URL                                                            | Description                  |
+| -------------------------------------------------------------- | ---------------------------- |
+| [`http://localhost:5173`](http://localhost:5173)               | Customer Demo (Chat + Voice) |
+| [`http://localhost:5173/agent`](http://localhost:5173/agent)   | Agent Dashboard              |
+| [`http://localhost:3001/health`](http://localhost:3001/health) | Backend Health Check         |
+
+### **Demo Scenarios**
+
+The platform includes 3 pre-built demo scenarios to showcase different use cases:
+
+| Scenario                 | Description                                        |
+| ------------------------ | -------------------------------------------------- |
+| 💰 **High Bill Dispute** | Customer frustrated about unexpectedly high bill   |
+| 🚨 **Report Gas Leak**   | Emergency situation requiring immediate escalation |
+| 🏠 **Setup New Service** | New customer requesting service activation         |
+
+Click any scenario button in the Chat or Voice interface to start a pre-configured conversation.
 
 ---
 
 ## ⚙️ **Configuration**
 
-### **Required Environment Variables**
+### **Environment Variables**
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root. Copy from `.env.example` and fill in your values:
 
 ```env
-# Core Infrastructure (Required)
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
-REDIS_URL="redis://localhost:6379"
+# ═══════════════════════════════════════════════════════════
+# MINIMAL SETUP (Works without Docker)
+# ═══════════════════════════════════════════════════════════
+
+# Server Configuration
 PORT=3001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
 
-# AI Services (Required for full functionality)
-GEMINI_API_KEY=your_gemini_api_key        # Google Gemini for chat + copilot
-RETELL_API_KEY=your_retell_api_key        # Retell AI for voice calls
-RETELL_AGENT_ID=your_retell_agent_id      # Your Retell voice agent ID
+# Database (Required - but app falls back to in-memory if unavailable)
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/customer_service?schema=public"
+REDIS_URL="redis://localhost:6379"
 
-# Optional Services (Enhanced features)
-TELNYX_API_KEY=your_telnyx_api_key        # Telephony provider
-TELNYX_CONNECTION_ID=your_connection_id    # Telnyx connection
-TELNYX_PHONE_NUMBER=+1234567890            # Your phone number
-OPENAI_API_KEY=your_openai_api_key        # For embeddings (RAG)
-WEBHOOK_BASE_URL=https://your-ngrok-url   # Public webhook URL
+# ═══════════════════════════════════════════════════════════
+# AI SERVICES (Add these for full functionality)
+# ═══════════════════════════════════════════════════════════
+
+# Google Gemini - Powers text chat + AI copilot
+# Get key at: https://makersuite.google.com/
+GEMINI_API_KEY=your_gemini_api_key
+
+# Retell AI - Powers voice calls
+# Get key at: https://retellai.com
+RETELL_API_KEY=your_retell_api_key
+RETELL_AGENT_ID=your_retell_agent_id
+
+# ═══════════════════════════════════════════════════════════
+# OPTIONAL SERVICES (Enhanced features)
+# ═══════════════════════════════════════════════════════════
+
+# Telnyx - Phone number integration
+TELNYX_API_KEY=your_telnyx_api_key
+TELNYX_CONNECTION_ID=your_connection_id
+TELNYX_PHONE_NUMBER=+1234567890
+
+# OpenAI - For RAG embeddings
+OPENAI_API_KEY=your_openai_api_key
+
+# Webhooks - For production deployments
+WEBHOOK_BASE_URL=https://your-domain.com
 ```
+
+### **What Works Without API Keys?**
+
+| Feature         | Without Keys        | With Keys       |
+| --------------- | ------------------- | --------------- |
+| Agent Dashboard | ✅ Full UI          | ✅ Full UI      |
+| Text Chat       | ⚠️ Basic responses  | ✅ Gemini AI    |
+| Voice Calls     | ❌ Not available    | ✅ Retell AI    |
+| AI Copilot      | ⚠️ Mock suggestions | ✅ Gemini AI    |
+| Analytics       | ⚠️ Mock data        | ✅ Real metrics |
 
 ### **Setting Up AI Services**
 
@@ -303,6 +368,7 @@ WEBHOOK_BASE_URL=https://your-ngrok-url   # Public webhook URL
 4. Copy your API key and Agent ID to `.env`
 
 **Utility Voice Agent Setup:**
+
 ```bash
 # Use our automated setup script
 curl -X POST http://localhost:3001/api/voice/agent/create-llm
@@ -341,7 +407,7 @@ curl -X POST http://localhost:3001/api/voice/agent/create-llm
 5. Assign phone number to application
 6. Add credentials to `.env`
 
-*Note: Phone integration is optional. Voice calls also work via browser WebRTC.*
+_Note: Phone integration is optional. Voice calls also work via browser WebRTC._
 
 </details>
 
@@ -414,6 +480,7 @@ customer-service-app/
 ## 🎨 **User Interface**
 
 ### **Agent Dashboard**
+
 The command center for human representatives:
 
 - **📋 Queue Panel** (Left): Live incoming requests with alerts
@@ -423,6 +490,7 @@ The command center for human representatives:
 - **📊 Metrics Footer**: Active calls, resolution times, performance
 
 ### **Customer Widget**
+
 Dual-channel customer interface:
 
 - **Text Chat**: Instant messaging with AI/human agents
@@ -436,22 +504,23 @@ Dual-channel customer interface:
 
 ### **Core Endpoints**
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check with service status |
-| `/api/chat` | POST | Send customer chat message |
-| `/api/chat/respond` | POST | Human agent response |
-| `/api/chat/switch` | POST | Switch between AI and human |
-| `/api/voice/web-call` | POST | Create browser-based voice call |
-| `/api/voice/agent` | GET | Get voice agent configuration |
-| `/api/switch` | POST | AI↔Human handoff for voice |
-| `/api/analytics/dashboard` | GET | Live dashboard metrics |
-| `/api/analytics/switches` | GET | Switch analytics by timeframe |
-| `/api/copilot/search` | POST | Search knowledge base |
+| Endpoint                   | Method | Description                      |
+| -------------------------- | ------ | -------------------------------- |
+| `/health`                  | GET    | Health check with service status |
+| `/api/chat`                | POST   | Send customer chat message       |
+| `/api/chat/respond`        | POST   | Human agent response             |
+| `/api/chat/switch`         | POST   | Switch between AI and human      |
+| `/api/voice/web-call`      | POST   | Create browser-based voice call  |
+| `/api/voice/agent`         | GET    | Get voice agent configuration    |
+| `/api/switch`              | POST   | AI↔Human handoff for voice       |
+| `/api/analytics/dashboard` | GET    | Live dashboard metrics           |
+| `/api/analytics/switches`  | GET    | Switch analytics by timeframe    |
+| `/api/copilot/search`      | POST   | Search knowledge base            |
 
 ### **Socket.io Events**
 
 **Client → Server:**
+
 - `agent:join` - Agent joins their room
 - `call:join` - Subscribe to call updates
 - `call:request_switch` - Request AI↔Human switch
@@ -460,6 +529,7 @@ Dual-channel customer interface:
 - `metrics:subscribe` - Subscribe to live metrics
 
 **Server → Client:**
+
 - `transcript:update` - New message in conversation
 - `copilot:suggestion` - AI suggestion for agent
 - `call:state_update` - Call mode changed
@@ -489,12 +559,12 @@ The platform tracks comprehensive analytics:
     "avgDuration": 198
   },
   "modeDistribution": {
-    "aiResolved": 1094,      // 70.8% AI resolution
-    "humanResolved": 312,     // 20.2% human only
-    "mixed": 141             // 9.1% both
+    "aiResolved": 1094, // 70.8% AI resolution
+    "humanResolved": 312, // 20.2% human only
+    "mixed": 141 // 9.1% both
   },
   "switchMetrics": {
-    "avgSwitchTime": 1.2,   // Seconds
+    "avgSwitchTime": 1.2, // Seconds
     "topReasons": {
       "CUSTOMER_REQUEST": 152,
       "COMPLEXITY": 89,
@@ -519,13 +589,13 @@ The platform tracks comprehensive analytics:
 
 ### **Test Scenarios**
 
-| Scenario | Channel | Steps |
-|----------|---------|-------|
-| **Happy Path** | Voice | Customer inquiry → AI resolves → Call ends |
-| **Escalation** | Voice | Customer requests human → Switch → Human resolves |
-| **Emergency** | Voice | Gas leak mentioned → Auto-escalate → Emergency team |
-| **Text Chat** | Chat | Customer asks question → AI responds → Follow-up |
-| **Multi-switch** | Both | AI → Human → AI → Human (stress test) |
+| Scenario         | Channel | Steps                                               |
+| ---------------- | ------- | --------------------------------------------------- |
+| **Happy Path**   | Voice   | Customer inquiry → AI resolves → Call ends          |
+| **Escalation**   | Voice   | Customer requests human → Switch → Human resolves   |
+| **Emergency**    | Voice   | Gas leak mentioned → Auto-escalate → Emergency team |
+| **Text Chat**    | Chat    | Customer asks question → AI responds → Follow-up    |
+| **Multi-switch** | Both    | AI → Human → AI → Human (stress test)               |
 
 ### **Running Tests**
 
@@ -547,6 +617,7 @@ npm run test:e2e
 ## 🏢 **Use Cases**
 
 ### **1. Utility Companies** (Primary)
+
 Our specialized domain with pre-built knowledge:
 
 - ⚡ **Billing inquiries**: Explain charges, rate tiers, high bills
@@ -558,6 +629,7 @@ Our specialized domain with pre-built knowledge:
 **ROI**: 70% AI resolution rate = ~$3M annual savings for 100-agent call center
 
 ### **2. E-Commerce**
+
 - Order tracking and status updates
 - Returns and refund processing
 - Product recommendations
@@ -565,6 +637,7 @@ Our specialized domain with pre-built knowledge:
 - Inventory and shipping inquiries
 
 ### **3. Healthcare**
+
 - Appointment scheduling and reminders
 - Insurance verification
 - Prescription refills
@@ -572,6 +645,7 @@ Our specialized domain with pre-built knowledge:
 - HIPAA-compliant audit trails
 
 ### **4. Financial Services**
+
 - Account balance and transaction inquiries
 - Fraud detection and reporting
 - Loan/mortgage application support
@@ -583,12 +657,14 @@ Our specialized domain with pre-built knowledge:
 ## 🔒 **Security & Compliance**
 
 ### **Data Protection**
+
 - All API calls encrypted with TLS 1.3
 - Database encryption at rest
 - Redis session data encrypted
 - PII data masked in logs
 
 ### **Audit & Compliance**
+
 - Complete conversation transcripts stored
 - Switch events logged with timestamps
 - Agent actions tracked
@@ -596,6 +672,7 @@ Our specialized domain with pre-built knowledge:
 - Configurable data retention policies
 
 ### **Access Control**
+
 - Agent authentication (planned)
 - Role-based access control (planned)
 - API key rotation support
@@ -604,6 +681,82 @@ Our specialized domain with pre-built knowledge:
 ---
 
 ## 🛠️ **Development**
+
+### **Troubleshooting**
+
+<details>
+<summary><strong>❌ Redis connection refused</strong></summary>
+
+The app automatically falls back to in-memory storage. You'll see:
+
+```
+⚠️  Redis unavailable - using in-memory storage
+   (Start Redis with: docker-compose up -d)
+```
+
+This is fine for development. For persistent sessions, start Docker:
+
+```bash
+docker-compose up -d
+```
+
+</details>
+
+<details>
+<summary><strong>❌ Database connection failed</strong></summary>
+
+If you see Prisma errors about database connection:
+
+1. **Option A**: Start Docker for full database support:
+   ```bash
+   docker-compose up -d
+   npm run db:generate
+   ```
+2. **Option B**: Continue without database (analytics will show mock data)
+</details>
+
+<details>
+<summary><strong>❌ Voice calls not working</strong></summary>
+
+Voice calls require Retell AI configuration:
+
+1. Sign up at [retellai.com](https://retellai.com)
+2. Create a voice agent
+3. Add to `.env`:
+   ```
+   RETELL_API_KEY=your_key
+   RETELL_AGENT_ID=your_agent_id
+   ```
+4. Restart the server
+</details>
+
+<details>
+<summary><strong>❌ Text chat shows basic responses</strong></summary>
+
+For AI-powered responses, add your Gemini API key:
+
+1. Get key from [Google AI Studio](https://makersuite.google.com/)
+2. Add to `.env`: `GEMINI_API_KEY=your_key`
+3. Restart the server
+</details>
+
+<details>
+<summary><strong>❌ Port already in use</strong></summary>
+
+Kill existing processes:
+
+```bash
+# Kill backend (port 3001)
+lsof -ti:3001 | xargs kill -9
+
+# Kill frontend (port 5173)
+lsof -ti:5173 | xargs kill -9
+
+# Restart
+npm run dev
+```
+
+</details>
 
 ### **Commands**
 
@@ -655,12 +808,12 @@ npm run clean            # Clean node_modules
 
 ### **Recommended Hosting**
 
-| Service | Recommendation |
-|---------|---------------|
-| **Backend** | Heroku, Render, AWS ECS, Railway |
-| **Frontend** | Vercel, Netlify, Cloudflare Pages |
-| **Database** | AWS RDS, Supabase, PlanetScale |
-| **Redis** | Redis Cloud, AWS ElastiCache |
+| Service      | Recommendation                      |
+| ------------ | ----------------------------------- |
+| **Backend**  | Heroku, Render, AWS ECS, Railway    |
+| **Frontend** | Vercel, Netlify, Cloudflare Pages   |
+| **Database** | AWS RDS, Supabase, PlanetScale      |
+| **Redis**    | Redis Cloud, AWS ElastiCache        |
 | **Webhooks** | ngrok (dev), your production domain |
 
 ---
@@ -668,6 +821,7 @@ npm run clean            # Clean node_modules
 ## 📈 **Roadmap**
 
 ### **v1.1 - Enhanced Features** (Q1)
+
 - [ ] Multi-language support (Spanish, French)
 - [ ] Mobile agent dashboard
 - [ ] Customer authentication
@@ -675,6 +829,7 @@ npm run clean            # Clean node_modules
 - [ ] Custom branding options
 
 ### **v1.2 - Enterprise Features** (Q2)
+
 - [ ] CRM integrations (Salesforce, HubSpot)
 - [ ] SSO authentication
 - [ ] Custom workflows
@@ -682,6 +837,7 @@ npm run clean            # Clean node_modules
 - [ ] Advanced routing rules
 
 ### **v2.0 - Platform Evolution** (Q3-Q4)
+
 - [ ] Video support
 - [ ] AI training mode (learn from human corrections)
 - [ ] Predictive routing
@@ -713,6 +869,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 **Acknowledgments**
 
 Built with cutting-edge technologies from:
+
 - [Retell AI](https://retellai.com) - Voice AI platform
 - [Google Gemini](https://ai.google.dev) - LLM for chat & copilot
 - [Telnyx](https://telnyx.com) - Telephony infrastructure
@@ -733,6 +890,6 @@ Built with cutting-edge technologies from:
 
 **Built for the future of customer service** 🚀
 
-*Intelligent AI × Human Collaboration*
+_Intelligent AI × Human Collaboration_
 
 </div>

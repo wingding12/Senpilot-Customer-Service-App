@@ -11,6 +11,27 @@ import { useState, useRef, useEffect } from 'react';
 import { useChatSocket } from '../../hooks/useChatSocket';
 import styles from './ChatWindow.module.css';
 
+const SCENARIOS = [
+  { 
+    id: 'high-bill', 
+    label: 'High Bill Dispute', 
+    icon: '💰',
+    message: "I just got my bill and it's $450! This is way too high compared to normal."
+  },
+  { 
+    id: 'gas-leak', 
+    label: 'Report Gas Leak', 
+    icon: '🚨',
+    message: "I smell something like rotten eggs in my kitchen. I'm worried it's a gas leak."
+  },
+  { 
+    id: 'new-service', 
+    label: 'Setup New Service', 
+    icon: '🏠',
+    message: "I'm moving to a new apartment next week and need to set up electricity."
+  },
+];
+
 export default function ChatWindow() {
   const {
     isConnected,
@@ -192,26 +213,17 @@ export default function ChatWindow() {
           <div className={styles.welcome}>
             <span className={styles.welcomeIcon}>⚡</span>
             <h3>Welcome to Utility Support!</h3>
-            <p>I'm your AI assistant. How can I help you today?</p>
+            <p>I'm your AI assistant. Start a scenario to see how I can help:</p>
             <div className={styles.quickActions}>
-              <button
-                className={styles.quickAction}
-                onClick={() => sendMessage('I have a question about my bill')}
-              >
-                💰 Billing
-              </button>
-              <button
-                className={styles.quickAction}
-                onClick={() => sendMessage('I want to report a power outage')}
-              >
-                ⚡ Outage
-              </button>
-              <button
-                className={styles.quickAction}
-                onClick={() => sendMessage('I need to set up new service')}
-              >
-                🏠 New Service
-              </button>
+              {SCENARIOS.map((scenario) => (
+                <button
+                  key={scenario.id}
+                  className={styles.quickAction}
+                  onClick={() => sendMessage(scenario.message)}
+                >
+                  {scenario.icon} {scenario.label}
+                </button>
+              ))}
             </div>
           </div>
         )}

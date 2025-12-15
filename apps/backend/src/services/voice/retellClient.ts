@@ -21,6 +21,8 @@ let retellClient: Retell | null = null;
  */
 export const UTILITY_VOICE_AGENT_PROMPT = `You are "Utility Assistant", an AI customer service agent for PowerGrid Energy Services, a residential electricity and natural gas utility company.
 
+{{start_context}}
+
 YOUR ROLE:
 You handle customer inquiries about their utility accounts, help resolve billing issues, report outages, set up payment arrangements, and guide customers through service changes. You represent a real utility company and should speak with confidence and authority about utility matters.
 
@@ -397,10 +399,12 @@ export async function registerPhoneCall(
  * Returns a call_id that can be used with Retell's WebRTC SDK
  *
  * @param metadata - Optional metadata to pass to the agent
+ * @param dynamicVariables - Optional dynamic variables for the LLM prompt
  * @returns The Retell call object
  */
 export async function createWebCall(
-  metadata?: Record<string, string>
+  metadata?: Record<string, string>,
+  dynamicVariables?: Record<string, any>
 ): Promise<{
   call_id: string;
   agent_id: string;
@@ -411,6 +415,7 @@ export async function createWebCall(
   const response = await client.call.createWebCall({
     agent_id: env.RETELL_AGENT_ID!,
     metadata,
+    retell_llm_dynamic_variables: dynamicVariables,
   });
 
   console.log(`🌐 Retell web call created: ${response.call_id}`);

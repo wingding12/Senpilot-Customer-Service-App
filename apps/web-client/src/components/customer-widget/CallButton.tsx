@@ -7,6 +7,12 @@ type CallStatus = "idle" | "connecting" | "active" | "ended" | "error";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
+const SCENARIOS = [
+  { id: 'high-bill', label: 'High Bill Dispute', icon: '💰' },
+  { id: 'gas-leak', label: 'Report Gas Leak', icon: '🚨' },
+  { id: 'new-service', label: 'Setup New Service', icon: '🏠' },
+];
+
 export default function CallButton() {
   const [status, setStatus] = useState<CallStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +98,7 @@ export default function CallButton() {
     };
   }, []);
 
-  const startCall = useCallback(async () => {
+  const startCall = useCallback(async (scenario?: string) => {
     if (!retellClientRef.current) {
       setError("Call client not initialized");
       return;
@@ -111,7 +117,9 @@ export default function CallButton() {
       const response = await fetch(`${API_URL}/api/voice/web-call`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          scenario, // Pass selected scenario
+        }),
       });
 
       if (!response.ok) {
@@ -277,6 +285,24 @@ export default function CallButton() {
           {status === "ended" && "Call ended"}
           {status === "error" && (error || "Connection failed")}
         </div>
+
+        {status === "idle" && (
+          <div className={styles.scenarios}>
+            <p className={styles.scenarioLabel}>Or try a demo scenario:</p>
+            <div className={styles.scenarioButtons}>
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.id}
+                  className={styles.scenarioButton}
+                  onClick={() => startCall(s.id)}
+                >
+                  <span>{s.icon}</span>
+                  <span>{s.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {status === "active" && (
           <div className={styles.controls}>

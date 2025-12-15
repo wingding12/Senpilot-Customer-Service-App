@@ -3,7 +3,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { app } from './app.js';
 import { env } from './config/env.js';
 import { initializeAgentGateway } from './sockets/agentGateway.js';
-import { connectRedis } from './services/state/sessionStore.js';
+import { connectRedis, isUsingInMemory } from './services/state/sessionStore.js';
 
 const httpServer = createServer(app);
 
@@ -20,8 +20,10 @@ initializeAgentGateway(io);
 
 async function startServer() {
   try {
-    // Connect to Redis
+    // Try to connect to Redis (will fallback to in-memory if unavailable)
     await connectRedis();
+    
+    const storageMode = isUsingInMemory() ? '📦 In-Memory' : '🗄️  Redis';
     
     httpServer.listen(env.PORT, () => {
       console.log(`
@@ -31,6 +33,7 @@ async function startServer() {
 ║                                                           ║
 ║   Server:    http://localhost:${env.PORT}                     ║
 ║   Health:    http://localhost:${env.PORT}/health              ║
+║   Storage:   ${storageMode.padEnd(12)}                          ║
 ║   Mode:      ${env.NODE_ENV.padEnd(11)}                           ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝

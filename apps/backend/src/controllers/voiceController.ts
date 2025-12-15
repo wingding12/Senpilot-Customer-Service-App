@@ -73,17 +73,41 @@ router.post("/web-call", async (req: Request, res: Response) => {
       return;
     }
 
-    const { customerId, metadata } = req.body;
+    const { customerId, metadata, scenario } = req.body;
 
     // Create a session ID for tracking
     const sessionId = `voice-${uuidv4()}`;
+
+    // Determine dynamic variables based on scenario
+    let dynamicVariables: Record<string, any> | undefined;
+    
+    if (scenario) {
+      let startContext = "";
+      switch (scenario) {
+        case "high-bill":
+          startContext = "CONTEXT: The customer is calling about a surprisingly high bill ($450 vs typical $150). They are frustrated. Start by acknowledging their concern about the bill amount immediately.";
+          break;
+        case "gas-leak":
+          startContext = "CONTEXT: The customer is reporting a gas leak/smell. Treat this as an IMMEDIATE EMERGENCY. Start by asking if they are safe and telling them to evacuate.";
+          break;
+        case "new-service":
+          startContext = "CONTEXT: The customer wants to set up new service at a new address. Start by asking for the address and move-in date.";
+          break;
+      }
+      
+      if (startContext) {
+        dynamicVariables = {
+          start_context: startContext
+        };
+      }
+    }
 
     // Create the Retell web call
     const webCall = await createWebCall({
       ...metadata,
       session_id: sessionId,
       customer_id: customerId,
-    });
+    }, dynamicVariables);
 
     // Create session in Redis
     await createSession(sessionId, {
