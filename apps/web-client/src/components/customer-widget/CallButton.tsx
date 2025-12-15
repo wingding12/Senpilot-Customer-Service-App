@@ -25,32 +25,58 @@ export default function CallButton() {
   const sessionIdRef = useRef<string | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
-  const lastTranscriptLengthRef = useRef<number>(0);
+  // Track which messages have been sent to the backend (by index)
+  const sentMessagesRef = useRef<Set<number>>(new Set());
+  // Track the last known content for each position to detect changes
+  const lastContentRef = useRef<Map<number, string>>(new Map());
 
   // Auto-scroll transcript to bottom
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcript]);
 
-  // Forward new transcript entries to the backend via Socket.io
+  // Forward COMPLETED transcript entries to the backend via Socket.io
+  // A message is considered complete when a new message appears after it
   useEffect(() => {
     if (!socketRef.current?.connected || !sessionIdRef.current) {
       return;
     }
     
-    // Only send new entries (compare with last known length)
-    const newEntries = transcript.slice(lastTranscriptLengthRef.current);
-    lastTranscriptLengthRef.current = transcript.length;
+    // Only send messages that are finalized (not the last one, which may still be in progress)
+    // Exception: if a message content has stabilized (hasn't changed) we can send it
+    const messagesToSend: Array<{ index: number; entry: { role: string; content: string } }> = [];
     
-    // Emit each new transcript entry to the backend
-    for (const entry of newEntries) {
-      console.log(`📤 Forwarding transcript [${sessionIdRef.current}]:`, entry.role, entry.content.substring(0, 30));
+    for (let i = 0; i < transcript.length; i++) {
+      const entry = transcript[i];
+      const isLastMessage = i === transcript.length - 1;
+      const alreadySent = sentMessagesRef.current.has(i);
+      const previousContent = lastContentRef.current.get(i);
+      
+      // Update the content tracker
+      lastContentRef.current.set(i, entry.content);
+      
+      if (alreadySent) {
+        continue; // Already sent this message
+      }
+      
+      if (!isLastMessage) {
+        // This message is finalized (there's a newer message after it)
+        messagesToSend.push({ index: i, entry });
+      }
+      // Don't send the last message - it might still be in progress
+      // It will be sent once a new message starts (making it not the last)
+    }
+    
+    // Send the finalized messages
+    for (const { index, entry } of messagesToSend) {
+      console.log(`📤 Forwarding completed transcript [${sessionIdRef.current}]:`, entry.role, entry.content.substring(0, 50));
       socketRef.current.emit("voice:transcript", {
         sessionId: sessionIdRef.current,
         role: entry.role,
         content: entry.content,
         timestamp: Date.now(),
       });
+      sentMessagesRef.current.add(index);
     }
   }, [transcript]);
 
@@ -69,6 +95,26 @@ export default function CallButton() {
 
     client.on("call_ended", () => {
       console.log("📞 Retell call ended");
+      // Flush any remaining unsent transcript messages
+      if (socketRef.current?.connected && sessionIdRef.current) {
+        setTranscript((currentTranscript) => {
+          for (let i = 0; i < currentTranscript.length; i++) {
+            if (!sentMessagesRef.current.has(i)) {
+              const entry = currentTranscript[i];
+              console.log(`📤 Sending final transcript on call_ended [${sessionIdRef.current}]:`, entry.role, entry.content.substring(0, 50));
+              socketRef.current?.emit("voice:transcript", {
+                sessionId: sessionIdRef.current,
+                role: entry.role,
+                content: entry.content,
+                timestamp: Date.now(),
+              });
+              sentMessagesRef.current.add(i);
+            }
+          }
+          return currentTranscript;
+        });
+        socketRef.current.emit("voice:end", { sessionId: sessionIdRef.current });
+      }
       setStatus("ended");
       setTimeout(() => setStatus("idle"), 2000);
     });
@@ -107,7 +153,9 @@ export default function CallButton() {
     setStatus("connecting");
     setError(null);
     setTranscript([]);
-    lastTranscriptLengthRef.current = 0;
+    // Reset tracking refs for new call
+    sentMessagesRef.current = new Set();
+    lastContentRef.current = new Map();
 
     try {
       // Request microphone permission first
@@ -179,8 +227,27 @@ export default function CallButton() {
       retellClientRef.current.stopCall();
     }
     
-    // Notify backend that call ended
-    if (socketRef.current && sessionIdRef.current) {
+    // Send any remaining unsent transcript messages before ending
+    if (socketRef.current?.connected && sessionIdRef.current) {
+      // Get current transcript from state - need to use a callback to access current state
+      setTranscript((currentTranscript) => {
+        for (let i = 0; i < currentTranscript.length; i++) {
+          if (!sentMessagesRef.current.has(i)) {
+            const entry = currentTranscript[i];
+            console.log(`📤 Sending final transcript [${sessionIdRef.current}]:`, entry.role, entry.content.substring(0, 50));
+            socketRef.current?.emit("voice:transcript", {
+              sessionId: sessionIdRef.current,
+              role: entry.role,
+              content: entry.content,
+              timestamp: Date.now(),
+            });
+            sentMessagesRef.current.add(i);
+          }
+        }
+        return currentTranscript; // Return unchanged
+      });
+      
+      // Notify backend that call ended
       socketRef.current.emit("voice:end", { sessionId: sessionIdRef.current });
     }
     
