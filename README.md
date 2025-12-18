@@ -16,7 +16,7 @@ Voice AI Customer Service Platform
 <tr>
 <td width="50%">
 
-### 🤖 **AI Voice Agent**
+###  **AI Voice Agent**
 
 - **Ultra-low latency**: <500ms response time
 - **Natural conversations**: Handles interruptions naturally
@@ -51,7 +51,7 @@ Voice AI Customer Service Platform
 </td>
 <td width="50%">
 
-### 🔄 **Seamless AI↔Human Switching**
+###  **Seamless AI↔Human Switching**
 
 - **Conference Bridge pattern**: No call drops
 - **One-click handoff** in agent dashboard
